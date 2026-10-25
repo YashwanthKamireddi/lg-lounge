@@ -1,9 +1,7 @@
-use crate::i18n::Language;
 use crate::weather::{Location, Unit};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
-pub const CATEGORIES: [&str; 4] = ["Streaming", "Music", "Gaming", "Utilities"];
 pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("slate", "Slate"),
     ("midnight", "Midnight"),
@@ -16,23 +14,9 @@ pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("northern-lights", "Northern lights"),
 ];
 
-// Keyword matching for brand icons: a needle only counts where the bytes
-// immediately around it aren't also ASCII alphanumeric, so "ard" doesn't
-// collide with unrelated apps like "dashboard". Any multi-byte UTF-8 byte
-// (title text in another script) is never ASCII-alphanumeric either, so it
-// reads as a boundary too; matching stays on raw bytes, not chars, which is
-// safe here since only the two single bytes right at the needle's edges are
-// ever inspected.
-//
-// A regex crate (`\bard\b` per needle) was the obvious alternative and isn't
-// ruled out for being slow - reused compiled patterns would match at a
-// comparable cost. It's skipped because: there's no regex dependency in this
-// crate yet, so adding one and the once-compiled-pattern machinery needed to
-// avoid recompiling per App::new() call is more than this fix needs; and
-// `\b` is Unicode-aware by default, treating CJK letters as word characters,
-// which would give different (not obviously better) results right next to
-// titles in another script than the plain "any non-ASCII byte is a
-// boundary" rule used here.
+// Generic fallbacks use delimited words, so "game" does not match "endgame".
+// Non-ASCII bytes count as boundaries for localized titles. Curated vector
+// branding is selected separately by exact ID in branding.rs.
 fn contains_word(haystack: &str, needle: &str) -> bool {
     let bytes = haystack.as_bytes();
     haystack.match_indices(needle).any(|(start, matched)| {
@@ -49,41 +33,33 @@ pub struct App {
     pub title: String,
     pub brand: String,
     pub category: String,
+    #[serde(skip)]
+    pub icon: Option<crate::app_artwork::Source>,
 }
 
 impl App {
     pub fn new(id: &str, title: &str) -> Self {
         let identity = format!("{id} {title}").to_lowercase();
-        let (brand, category) = [
-            ("livetv", "live-tv", "Streaming"),
-            ("netflix", "netflix", "Streaming"),
-            ("youtube", "youtube", "Streaming"),
-            ("appletv", "apple-tv", "Streaming"),
-            ("disney", "disney-plus", "Streaming"),
-            ("amazon", "prime-video", "Streaming"),
-            ("jellyfin", "jellyfin", "Streaming"),
-            ("arte", "arte", "Streaming"),
-            ("zdf", "zdf", "Streaming"),
-            ("ard", "das-erste", "Streaming"),
-            ("plex", "plex", "Streaming"),
+        let generic = [
             ("kodi", "kodi", "Streaming"),
-            ("spotify", "spotify", "Music"),
             ("moonlight", "moonlight", "Gaming"),
             ("limelight", "moonlight", "Gaming"),
             ("game", "gaming", "Gaming"),
             ("hbchannel", "homebrew", "Utilities"),
-            ("browser", "browser", "Utilities"),
         ]
         .into_iter()
         .find_map(|(needle, brand, category)| {
             contains_word(&identity, needle).then_some((brand, category))
         })
         .unwrap_or(("generic", "Utilities"));
+        let (brand, category) =
+            crate::branding::for_app(id).map_or(generic, |brand| (brand.key, brand.category));
         Self {
             id: id.into(),
             title: title.into(),
             brand: brand.into(),
             category: category.into(),
+            icon: None,
         }
     }
 }
@@ -94,6 +70,36 @@ pub struct Input {
     pub title: String,
     pub port: String,
     pub connected: Option<bool>,
+}
+
+/// The signed-in LG account's profile, as LG Home shows it: a nickname and
+/// the colour of its avatar circle. Nothing else about the account is read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Profile {
+    pub nick: String,
+    pub color: u32,
+}
+
+impl Profile {
+    /// From LG's account fields; a missing or malformed colour falls back to
+    /// LG's default profile purple.
+    pub fn from_fields(nick: &str, background: Option<&str>) -> Option<Self> {
+        let nick = nick.trim();
+        if nick.is_empty() {
+            return None;
+        }
+        let color = background
+            .and_then(|hex| hex.trim().strip_prefix('#'))
+            .filter(|hex| hex.len() == 6)
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+            .unwrap_or(0x7360e7);
+        Some(Self { nick: nick.chars().take(32).collect(), color })
+    }
+
+    /// The avatar's letter: the nickname's first, upper-cased.
+    pub fn initial(&self) -> String {
+        self.nick.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -117,6 +123,8 @@ pub struct Preferences {
     pub hidden: Vec<String>,
     pub background: String,
     pub show_names: bool,
+    /// Bundled Top Shelf art behind the dock; off shows the wallpaper.
+    pub top_shelf_art: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
     pub input_modes: BTreeMap<String, InputMode>,
@@ -126,8 +134,11 @@ pub struct Preferences {
     pub weather_location: Option<Location>,
     #[serde(deserialize_with = "crate::weather::deserialize_unit")]
     pub temperature_unit: Unit,
-    #[serde(deserialize_with = "crate::i18n::deserialize_language")]
-    pub language: Language,
+    /// Most recently opened apps first; orders the app switcher.
+    pub recent: Vec<String>,
+    /// The profile picture: a file in the avatars folder, or "rotate" for all
+    /// of them in turn. None is the first picture.
+    pub avatar: Option<String>,
 }
 
 impl Default for Preferences {
@@ -137,13 +148,15 @@ impl Default for Preferences {
             hidden: vec![],
             background: "dunes".into(),
             show_names: false,
+            top_shelf_art: false,
             hour_24: false,
             reduced_motion: false,
             input_modes: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
-            language: Language::En,
+            recent: vec![],
+            avatar: None,
         }
     }
 }
@@ -197,6 +210,8 @@ impl Preferences {
             clean(ids);
         }
         clean(&mut self.hidden);
+        clean(&mut self.recent);
+        self.recent.truncate(24);
         self.input_modes.retain(|id, _| valid_app_id(id));
     }
 }
@@ -210,7 +225,7 @@ pub fn valid_app_id(id: &str) -> bool {
 }
 
 pub fn demo_inventory() -> Inventory {
-    Inventory {
+    let mut inventory = Inventory {
         apps: [
             ("com.webos.app.livetv", "Live TV"),
             ("netflix", "Netflix"),
@@ -259,5 +274,12 @@ pub fn demo_inventory() -> Inventory {
                 connected: Some(false),
             },
         ],
+    };
+    // Desktop-only artwork gallery. TV inventory is always read from services.
+    for brand in crate::branding::BRANDS {
+        if !inventory.apps.iter().any(|app| app.brand == brand.key) {
+            inventory.apps.push(App::new(brand.ids[0], brand.title));
+        }
     }
+    inventory
 }

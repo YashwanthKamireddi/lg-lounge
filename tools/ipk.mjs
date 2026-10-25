@@ -54,6 +54,10 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
   const files = entries(tar);
   const owned = files.filter((file) => file.name.split('/').includes(manifest.id));
   if (!owned.length) throw new Error('The IPK contains no Luma app directory.');
+  if (
+    owned.some((file) => /\/assets\/(app-icons(?:\/|$)|icons\.json$|colors\.json$)/.test(file.name))
+  )
+    throw new Error('Collected desktop icon fixtures must not be shipped in the TV package.');
   const appinfo = owned.find((file) => file.name.endsWith('/appinfo.json'));
   const actual = appinfo && JSON.parse(appinfo.data.toString());
   if (
@@ -79,26 +83,16 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     manifest.main,
     manifest.icon,
     manifest.largeIcon,
-    'autostart.sh',
-    'home.sh',
-    'home.cjs',
     'lib/libSDL2-2.0.so.0',
     'licenses/sdl2.txt',
     'licenses/lucide.txt',
-    'assets/icons.json',
-    'assets/colors.json',
     'assets/font-metrics.json',
     'assets/font-license.txt',
-    'assets/font-cjk-license.txt',
     'assets/version.txt',
     ...[350, 400, 450, 500, 550, 600, 650, 800].flatMap((weight) => [
       `assets/font-${weight}.ttf`,
       `assets/font-display-${weight}.ttf`,
     ]),
-    'assets/font-cjk-400.ttf',
-    'assets/font-cjk-500.ttf',
-    'assets/font-kr-400.ttf',
-    'assets/font-kr-500.ttf',
     ...[
       'dunes',
       'midnight',
@@ -157,10 +151,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     if (!['', '0', '5'].includes(file.type))
       throw new Error(`Unexpected package entry type: ${file.name}`);
     const executable =
-      file.type === '5' ||
-      file.name.endsWith('/autostart.sh') ||
-      file.name.endsWith('/home.sh') ||
-      file.name.endsWith(`/${manifest.main}`);
+      file.type === '5' || file.name.endsWith(`/${manifest.main}`);
     file.header.write(executable ? '0000755\0' : '0000644\0', 100, 8, 'ascii');
     file.header.fill(32, 148, 156);
     const sum = file.header.reduce((total, byte) => total + byte, 0);
