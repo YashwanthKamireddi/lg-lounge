@@ -1,8 +1,9 @@
-<img src="docs/readme/demo.webp" align="right" width="44%" alt="Lounge on an LG TV: the dock, the Inputs panel and the app grid">
-
-# <img src="docs/logo.png" width="34" align="top" alt=""> Lounge
-
-A native Home for rooted LG webOS TVs, written in Rust and drawn directly with OpenGL ES.
+<div align="center">
+  <img src="docs/logo.png" width="64" alt="Lounge logo">
+  <h1>Lounge</h1>
+  <p>A native Home for rooted LG webOS TVs, written in Rust and drawn directly with OpenGL ES.</p>
+  <img src="docs/readme/demo.webp" width="640" alt="Lounge on an LG TV: the dock, the Inputs panel and the app grid">
+</div>
 
 Lounge replaces LG's Home screen with a dock of apps over a wallpaper, the rest of the apps one
 press down and the TV's inputs one press up. It runs as the TV's real Home: the Home button opens
@@ -10,8 +11,6 @@ it, a cold boot lands on it, and it resumes in place instead of restarting.
 
 This page explains how it is built: why it stays fast on a TV's small GPU, how it takes the place
 of LG's Home without touching the firmware, and how it is tested.
-
-<br clear="right">
 
 ## Why it is fast
 
