@@ -110,7 +110,8 @@ pub trait System {
     fn real_path(&self, path: &str) -> io::Result<String>;
     /// Runs a program to its end (10 s at most) and returns its stdout.
     fn run(&self, program: &str, args: &[&str]) -> Result<String, String>;
-    fn pause(&self, seconds: u64);
+    /// Waits `millis` milliseconds.
+    fn pause(&self, millis: u64);
     fn pids(&self) -> Result<Vec<u32>, String>;
     /// Signals `pid`; one already gone is fine.
     fn kill(&self, pid: u32, signal: Signal) -> Result<(), String>;
@@ -511,7 +512,7 @@ impl<S: System> Home<S> {
                 }
                 Err(error) => last = error,
             }
-            self.system.pause(1);
+            self.system.pause(1000);
         }
         Err(format!("Release Home: {last}"))
     }
@@ -559,7 +560,7 @@ impl<S: System> Home<S> {
             if self.sam_reads(lounge)? {
                 return Ok(());
             }
-            self.system.pause(1);
+            self.system.pause(1000);
         }
         Err("sam did not read Home's manifest again".into())
     }
@@ -621,7 +622,7 @@ impl<S: System> Home<S> {
             if alive().is_empty() {
                 break;
             }
-            self.system.pause(1);
+            self.system.pause(1000);
         }
         for pid in alive() {
             self.system.kill(pid, Signal::Kill)?;
@@ -630,7 +631,7 @@ impl<S: System> Home<S> {
             if alive().is_empty() {
                 break;
             }
-            self.system.pause(1);
+            self.system.pause(1000);
         }
         if !alive().is_empty() {
             return Err("The previous Home process has not stopped".into());
@@ -659,7 +660,7 @@ impl<S: System> Home<S> {
             if self.foreground()? == id {
                 return Ok(());
             }
-            self.system.pause(1);
+            self.system.pause(1000);
         }
         Err("Home did not come to the front".into())
     }
@@ -1116,7 +1117,7 @@ impl<S: System> Home<S> {
                     if i == 29 {
                         self.system.log(&error);
                     }
-                    self.system.pause(2);
+                    self.system.pause(2000);
                 }
             }
         }
@@ -1124,7 +1125,7 @@ impl<S: System> Home<S> {
             if early || !self.system.exists("/tmp/criu_enable") || self.system.exists(BOOT_COPY) {
                 break;
             }
-            self.system.pause(2);
+            self.system.pause(2000);
         }
         self.apply(&settings, false)?;
         self.home_after_boot(id);
@@ -1212,10 +1213,13 @@ impl<S: System> Home<S> {
                 .log("boot: Home Auto Launch is off; the TV's input stays in front");
             return;
         }
-        for i in 0..30 {
+        // Asked every quarter second: the input webOS opens is replaced the moment it is in
+        // front (a 2 s step left it on screen up to 2 s longer).
+        const STEPS: u32 = 240;
+        for i in 0..STEPS {
             // sam is busy with the boot; ask again (and say why on the last try).
             let app = self.foreground().unwrap_or_else(|error| {
-                if i == 29 {
+                if i == STEPS - 1 {
                     self.system.log(&error);
                 }
                 String::new()
@@ -1223,7 +1227,7 @@ impl<S: System> Home<S> {
             // Home in front (or nothing yet): the boot manager may still open the input over
             // it, so keep watching.
             if app.is_empty() || app == id {
-                self.system.pause(2);
+                self.system.pause(250);
                 continue;
             }
             if startup_screen(&app) {
@@ -1455,8 +1459,8 @@ impl System for Tv {
         run_bounded(program, args, std::time::Duration::from_secs(10))
     }
 
-    fn pause(&self, seconds: u64) {
-        std::thread::sleep(std::time::Duration::from_secs(seconds.max(1)));
+    fn pause(&self, millis: u64) {
+        std::thread::sleep(std::time::Duration::from_millis(millis.max(1)));
     }
 
     fn pids(&self) -> Result<Vec<u32>, String> {

@@ -364,7 +364,7 @@ impl System for Fake {
         }
     }
 
-    fn pause(&self, _seconds: u64) {
+    fn pause(&self, _millis: u64) {
         let mut state = self.0.borrow_mut();
         state.pauses += 1;
         if let Some((after, input)) = state.late_input
