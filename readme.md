@@ -1,36 +1,17 @@
-<div align="center">
+<img src="docs/readme/demo.webp" align="right" width="44%" alt="Lounge on an LG TV: the dock, the Inputs panel and the app grid">
 
-<img src="docs/logo.png" width="96" alt="Lounge logo">
+# <img src="docs/logo.png" width="34" align="top" alt=""> Lounge
 
-# Lounge
+A native Home for rooted LG webOS TVs, written in Rust and drawn directly with OpenGL ES.
 
-**A native Home for rooted LG webOS TVs: one Rust binary, drawn with OpenGL ES.**
+Lounge replaces LG's Home screen with a dock of apps over a wallpaper, the rest of the apps one
+press down and the TV's inputs one press up. It runs as the TV's real Home: the Home button opens
+it, a cold boot lands on it, and it resumes in place instead of restarting.
 
-<img src="docs/readme/demo.webp" alt="Lounge on an LG TV: the dock, the Inputs panel and the app grid" width="100%">
+This page explains how it is built: why it stays fast on a TV's small GPU, how it takes the place
+of LG's Home without touching the firmware, and how it is tested.
 
-</div>
-
-Lounge replaces LG's Home screen. It shows a dock of five apps over a wallpaper, every other app
-one press down, and the TV's inputs one press up. It runs as the TV's real Home: the Home button
-opens it, a cold boot lands on it, and it resumes in place instead of restarting.
-
-This document is about how it is built and why it is fast.
-
-## At a glance
-
-Measured on the test TV, an LG 65UQ801C0SB (webOS 22, Mali-G52, 1.3 GB RAM):
-
-|                                    | Lounge                 | Notes                                          |
-| ---------------------------------- | ---------------------- | ---------------------------------------------- |
-| Binary                             | 4.5 MB                 | one executable, no runtime                     |
-| First frame, cold start            | 0.46 s                 | process start to first presented frame         |
-| Back to Home from an app           | ~0.1 s                 | the running instance is raised, not relaunched |
-| Frame pacing, scrolling the grid   | 16.7 ms, 0 slow of 600 | at 1080p                                       |
-| CPU while idle on Home             | 0 ticks in 60 s        | 6 wake-ups, all for the clock                  |
-| Own memory on Home / behind an app | ~25 MB / ~11 MB        | LG's Home keeps ~113 MB behind YouTube         |
-| On screen after a cold boot        | ~23 s                  | stock Homebrew hooks reach ~42 s               |
-
-Other TVs measure differently; `tools/tv-bench.sh` measures yours.
+<br clear="right">
 
 ## Why it is fast
 
@@ -43,7 +24,7 @@ the GPU directly and does nothing when nothing changes.
   OpenGL ES 2.0 calls through SDL2. There is no DOM, layout engine or JavaScript.
 - **It sleeps.** The loop blocks in SDL until there is input or news from webOS. App, input and
   window changes arrive as Luna bus subscriptions on worker threads, which wake the loop through
-  one coalesced event. Idle on Home it wakes once a minute, to redraw the clock.
+  one coalesced event. Idle on Home it wakes only when the clock changes.
 - **It draws only what changed.** With EGL partial update a frame repaints only its damaged
   region. Opaque tiles are written to the stencil buffer first, so nothing hidden behind them is
   shaded.
@@ -88,14 +69,14 @@ that webOS itself reads, and every part is removed again when Lounge as Home is 
   bus role. On webOS 25 and 26, where sam reads a mounted manifest, a staged Home manifest that
   points at Lounge is mounted instead.
 - **Resuming, not restarting.** Lounge registers with sam's app lifecycle (`registerApp`), so a
-  Home press raises the running instance in about 0.1 s.
-- **Cold boot.** webOS finishes its core boot about 18 s after power-on and opens the last input.
-  Homebrew Channel's boot hooks run only around 40 s. Lounge registers a small root service,
+  Home press raises the running instance instead of starting a new one.
+- **Cold boot.** webOS opens the last input as soon as its core boot is done, long before
+  Homebrew Channel's boot hooks run. Lounge registers a small root service,
   `lounge-early`, in `/var/luna-service2`, which webOS loads at core-boot-done, plus a key filter
   in the compositor. While the TV boots, the filter calls the service, which mounts Lounge and
   stops the Home webOS restored from its snapshot. The filter then opens Home over the first
-  input. Lounge is on screen about 23 s after power-on. If any part fails, the Homebrew hook
-  takes over at about 40 s as before.
+  input, so Lounge is the first screen after LG's logo. If any part fails, the Homebrew hook
+  takes over later in the boot as before.
 - **Staying safe.** Three failed starts within a minute hand Home back to LG. Turning Lounge as
   Home off from the remote removes the mount, the service, the filter and the hook. Uninstalling
   Lounge and restarting the TV does the same.
@@ -113,15 +94,13 @@ when the code closes.
 - **Unit tests** cover state, navigation, the Home takeover (against a model of webOS: mounts,
   processes, sam and configd), the photo pipeline and the phone server.
 - **Headless render tests** run every screen in the native renderer under a headless compositor.
-  A change that paints more than 3.25 screens of fill per frame, or holds more than 64 MB of
-  artwork or 8 MB of text geometry, fails.
-- **On the TV**, `tools/tv-bench.sh` measures frame pacing over 1000 presented frames per
-  scenario.
+  Each has a budget for screen fill, artwork and text memory; a change that exceeds one fails.
+- **On the TV**, `tools/tv-bench.sh` measures frame pacing per scenario.
 
 ## Compatibility
 
-LG TVs from 2020 on: webOS 5 and 6, then webOS 22 to 26 (internally 7 to 11). Lounge picks the
-takeover method for each. Daily use is on webOS 22; the others are covered by the tests. Root
+LG TVs from 2020 on: webOS 5 and 6, then webOS 22 to 26. Lounge picks the takeover method for
+each. Daily use is on webOS 22; the others are covered by the tests. Root
 with an elevated [Homebrew Channel](https://www.webosbrew.org/) is required.
 
 ## Privacy

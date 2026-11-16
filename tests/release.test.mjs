@@ -129,8 +129,8 @@ function gateFixture({ pull = {}, previous = '2.0.3', current = '2.0.4', event =
   const releasePull = {
     merged_at: '2026-10-23T12:00:00Z',
     merge_commit_sha: context.sha,
-    base: { ref: 'main', repo: { full_name: 'YashwanthKamireddi/lounge' } },
-    head: { ref: 'changeset-release/main', repo: { full_name: 'YashwanthKamireddi/lounge' } },
+    base: { ref: 'main', repo: { full_name: 'YashwanthKamireddi/lg-lounge' } },
+    head: { ref: 'changeset-release/main', repo: { full_name: 'YashwanthKamireddi/lg-lounge' } },
     ...pull,
   };
   const reads = [];
@@ -169,7 +169,7 @@ test('ordinary merges, unmerged PRs, forks and manual runs cannot publish', asyn
   const cases = [
     [
       'feature PR',
-      { pull: { head: { ref: 'feature', repo: { full_name: 'YashwanthKamireddi/lounge' } } } },
+      { pull: { head: { ref: 'feature', repo: { full_name: 'YashwanthKamireddi/lg-lounge' } } } },
     ],
     ['unmerged version PR', { pull: { merged_at: null } }],
     ['different merge commit', { pull: { merge_commit_sha: 'other-commit' } }],
@@ -180,7 +180,7 @@ test('ordinary merges, unmerged PRs, forks and manual runs cannot publish', asyn
     ['deleted head repository', { pull: { head: { ref: 'changeset-release/main', repo: null } } }],
     [
       'different base',
-      { pull: { base: { ref: 'develop', repo: { full_name: 'YashwanthKamireddi/lounge' } } } },
+      { pull: { base: { ref: 'develop', repo: { full_name: 'YashwanthKamireddi/lg-lounge' } } } },
     ],
     ['manual CI run', { event: { eventName: 'workflow_dispatch' } }],
     ['PR checks', { event: { eventName: 'pull_request' } }],
