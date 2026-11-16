@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="docs/logo.png" width="64" alt="Lounge logo">
-  <h1>Lounge</h1>
+  <h1><img src="docs/logo.png" height="40" align="top" alt=""> Lounge</h1>
   <p>A native Home for rooted LG webOS TVs, written in Rust and drawn directly with OpenGL ES.</p>
   <img src="docs/readme/demo.webp" width="640" alt="Lounge on an LG TV: the dock, the Inputs panel and the app grid">
 </div>
