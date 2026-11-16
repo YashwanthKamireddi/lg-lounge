@@ -93,6 +93,10 @@ pub enum Draw {
     /// specular rim, bright where light falls on the edge and gone below.
     GradientRing(Rect, f32, f32, Color, Color),
     Shadow(Rect, f32, f32, Color),
+    /// A rounded rectangle (`Rect`, corner radius) turned `angle` radians clockwise about a
+    /// point: a clock's hands. Shaded in its own frame, so its edges stay as smooth as any
+    /// shape's.
+    Rotated(Rect, f32, f32, (f32, f32), Color),
     Text(String, Rect, TextStyle, Color, bool),
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
@@ -312,6 +316,10 @@ impl Uniforms {
 }
 
 pub struct Renderer {
+    /// Pictures kept on the GPU even while off screen: Home's own (see `view::resident`).
+    /// Evicted in the grid, the sharp wallpaper had to go up again on the way back, and a
+    /// picture that large waits for motion to end: the blurred one showed, then snapped sharp.
+    pub pinned: Vec<String>,
     /// The GPU takes ASTC textures (the TV's Mali does; desktop GL may not).
     astc: bool,
     program: GLuint,
@@ -584,6 +592,7 @@ impl Renderer {
             glyphs: HashMap::new(),
             text_runs: HashMap::new(),
             textures: HashMap::new(),
+            pinned: Vec::new(),
             installed_icons: HashMap::new(),
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
@@ -627,6 +636,53 @@ impl Renderer {
         texture: GLuint,
     ) {
         self.gradient_quad(rect, uv, radius, border, [color, color], texture);
+    }
+
+    /// One whole quad for `Draw::Rotated`: its corners turned about `pivot`, its shape
+    /// coordinates left in its own frame for the shader's rounded edge.
+    fn rotated_quad(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        angle: f32,
+        pivot: (f32, f32),
+        color: Color,
+    ) {
+        if rect.w <= 0. || rect.h <= 0. {
+            return;
+        }
+        let (sin, cos) = angle.sin_cos();
+        let start = self.vertices.len() / 14;
+        for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
+            let (px, py) = (rect.x + x * rect.w - pivot.0, rect.y + y * rect.h - pivot.1);
+            self.vertices.extend_from_slice(&[
+                pivot.0 + px * cos - py * sin,
+                pivot.1 + px * sin + py * cos,
+                0.,
+                0.,
+                color[0],
+                color[1],
+                color[2],
+                color[3],
+                (x - 0.5) * rect.w,
+                (y - 0.5) * rect.h,
+                rect.w / 2.,
+                rect.h / 2.,
+                radius,
+                0.,
+            ]);
+        }
+        self.batches.push(Batch {
+            kind: BatchKind::Paint {
+                texture: self.white.id,
+                start,
+                count: 6,
+                lens: self.lens,
+            },
+            clip: self.clip,
+            fade: self.fade,
+            rank: self.rank,
+        });
     }
 
     fn gradient_quad(
@@ -1096,7 +1152,10 @@ impl Renderer {
                 Draw::AppImage(..) => no_image,
                 Draw::Glass(..) => no_image || no_glass,
                 Draw::Dissolve(..) => no_image || no_glass || no_dissolve,
-                Draw::Shape(..) | Draw::RoundedGradient(..) | Draw::GradientRing(..) => no_shape,
+                Draw::Shape(..)
+                | Draw::RoundedGradient(..)
+                | Draw::GradientRing(..)
+                | Draw::Rotated(..) => no_shape,
                 _ => false,
             };
             if skipped {
@@ -1122,6 +1181,9 @@ impl Renderer {
                 | Draw::RoundedGradient(rect, ..)
                 | Draw::GradientRing(rect, ..) => Some(("shape", *rect)),
                 Draw::Shadow(rect, _, blur, _) => Some(("shadow", rect.inset(-*blur))),
+                Draw::Rotated(rect, _, angle, pivot, _) => {
+                    Some(("shape", rotated_bounds(*rect, *angle, *pivot)))
+                }
                 Draw::Text(_, rect, ..) => Some(("text", *rect)),
                 Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) => Some((
                     if path.ends_with(".lvec") {
@@ -1140,6 +1202,9 @@ impl Renderer {
                 *fill.entry(kind).or_insert(0.) += screens(rect, self.clip);
             }
             match command {
+                Draw::Rotated(rect, radius, angle, pivot, color) => {
+                    self.rotated_quad(*rect, *radius, *angle, *pivot, *color)
+                }
                 Draw::Shape(rect, radius, border, color) => self.quad(
                     *rect,
                     [0., 0., 1., 1.],
@@ -1511,6 +1576,7 @@ impl Renderer {
             let mut old: Vec<_> = self
                 .textures
                 .iter()
+                .filter(|(path, _)| !self.pinned.contains(path))
                 .filter_map(|(path, t)| {
                     t.as_ref()
                         .filter(|t| t.frame != self.frame)
@@ -1960,4 +2026,26 @@ mod tests {
         // Even a glyph drawn last frame goes: its run is already built.
         assert!(glyphs.is_empty());
     }
+}
+
+/// The screen box a `Draw::Rotated` covers.
+pub fn rotated_bounds(rect: Rect, angle: f32, pivot: (f32, f32)) -> Rect {
+    let (sin, cos) = angle.sin_cos();
+    let corners = [
+        (rect.x, rect.y),
+        (rect.x + rect.w, rect.y),
+        (rect.x, rect.y + rect.h),
+        (rect.x + rect.w, rect.y + rect.h),
+    ]
+    .map(|(x, y)| {
+        let (px, py) = (x - pivot.0, y - pivot.1);
+        (pivot.0 + px * cos - py * sin, pivot.1 + px * sin + py * cos)
+    });
+    let (x0, x1) = corners
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.0), b.max(c.0)));
+    let (y0, y1) = corners
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.1), b.max(c.1)));
+    Rect::new(x0, y0, x1 - x0, y1 - y0)
 }

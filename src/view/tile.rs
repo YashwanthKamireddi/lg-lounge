@@ -39,11 +39,20 @@ pub(super) fn tile(
         Rect::new(rect.x, rect.y, rect.w, rect.h + label_height),
         true,
     );
-    // One pitch of slack: drawn positions glide behind the layout positions.
-    if rect.y + rect.h + label_height < MAIN_TOP - 340.
-        || rect.y > 1054. + 340.
-        || rect.x + rect.w < -340.
-        || rect.x > 1920. + 340.
+    // Off screen where it is drawn, not where the layout puts it: the page is drawn at the
+    // gliding scroll (see view::scene), which on a jump from the grid back to Home trails the
+    // layout by the whole grid. Culled by the layout, the lower rows vanished in one frame
+    // before anything moved.
+    let (dx, dy) = match state.page {
+        crate::state::Page::Apps => (0., state.shown_scroll - state.scroll),
+        crate::state::Page::Home => (state.shown_home_scroll - state.home_scroll, 0.),
+        crate::state::Page::Settings => (0., 0.),
+    };
+    let drawn = Rect::new(rect.x - dx, rect.y - dy, rect.w, rect.h);
+    if drawn.y + drawn.h + label_height < MAIN_TOP - 120.
+        || drawn.y > 1054. + 120.
+        || drawn.x + drawn.w < -120.
+        || drawn.x > 1920. + 120.
     {
         return;
     }
@@ -88,18 +97,20 @@ pub(super) fn tile(
             0.55 * lift + 0.15 * raise,
         );
     }
+    // Focus outline (Settings › General), for eyes that miss the lift: on the focused card
+    // only. The card focus leaves drops it at once while it settles back; fading with it, two
+    // cards wore a ring at the same time and the move read as lagging.
+    let outline = state.preferences.focus_outline && focused && lift > 0.;
     tile_face(out, assets, app, rect, radius);
     // Lit from above as it lifts, as tvOS's focused cards are: a bright rim along the top edge
     // that fades down the sides.
     if lift > 0. {
         out.rim(rect, radius, 0.22 * lift, 0.);
     }
-    // Focus outline (Settings › General): the lift alone can be hard to follow from across the
-    // room; a white ring fades in with it.
-    if state.preferences.focus_outline && lift > 0. {
+    // A fine ring a few pixels out, as visionOS and macOS draw focus: precise, never heavy.
+    if outline {
         let start = out.draw.len();
-        // Bolder than a control's ring: it is for eyes that miss the lift.
-        out.border(rect.inset(-7.), radius + 7., 5., c(0xffffff, 1.));
+        out.border(rect.inset(-5.), radius + 5., 2.5, c(0xffffff, 0.95));
         out.fade(start, lift, 1.);
     }
     if pinned {

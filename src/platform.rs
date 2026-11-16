@@ -1817,6 +1817,40 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
         let Some(id) = entry.get("appId").and_then(Value::as_str) else {
             continue;
         };
+        // AV and Component (older sets): opened by an app of their own, with a meaningful
+        // `connected` and no `hdmiPlugIn` (eim lists them as AV_<n> and COMP_<n>).
+        let analog = [
+            ("com.webos.app.externalinput.av", "AV_", "AV"),
+            (
+                "com.webos.app.externalinput.component",
+                "COMP_",
+                "Component",
+            ),
+        ]
+        .into_iter()
+        .find_map(|(app, device, name)| {
+            let rest = id.strip_prefix(app)?;
+            let device_id = entry.get("id").and_then(Value::as_str)?;
+            let number = device_id.strip_prefix(device)?.parse::<u8>().ok()?;
+            (rest.is_empty() || rest == number.to_string()).then(|| {
+                if rest.is_empty() {
+                    name.to_owned()
+                } else {
+                    format!("{name} {number}")
+                }
+            })
+        });
+        if let Some(port) = analog {
+            if inputs.iter().all(|input: &Input| input.id != id) {
+                inputs.push(Input {
+                    id: id.into(),
+                    title: title(entry.get("label").and_then(Value::as_str), &port),
+                    port,
+                    connected: entry.get("connected").and_then(Value::as_bool),
+                });
+            }
+            continue;
+        }
         let Some(number) = id
             .strip_prefix("com.webos.app.hdmi")
             .and_then(|s| s.parse::<u8>().ok())
@@ -1923,6 +1957,36 @@ pub fn elevated(command: &str, field: &str) -> Result<Value, String> {
 #[cfg(test)]
 mod status_tests {
     use super::*;
+
+    #[test]
+    fn av_and_component_inputs_are_listed_beside_hdmi() {
+        let inputs = normalize_inputs(&json!([
+            {"id": "HDMI_1", "appId": "com.webos.app.hdmi1", "port": 1, "connected": true},
+            {"id": "AV_1", "appId": "com.webos.app.externalinput.av1", "port": 1, "connected": false},
+            {"id": "COMP_1", "appId": "com.webos.app.externalinput.component", "port": 1,
+             "connected": true, "label": "VCR"},
+        ]))
+        .unwrap();
+        let shown: Vec<_> = inputs
+            .iter()
+            .map(|input| {
+                (
+                    input.port.as_str(),
+                    input.title.as_str(),
+                    input.connected,
+                    input.device(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("HDMI 1", "HDMI 1", Some(true), "HDMI_1".to_owned()),
+                ("AV 1", "AV 1", Some(false), "AV_1".to_owned()),
+                ("Component", "VCR", Some(true), "COMP_1".to_owned()),
+            ]
+        );
+    }
 
     #[test]
     fn only_plugging_a_device_in_or_out_changes_the_inputs() {

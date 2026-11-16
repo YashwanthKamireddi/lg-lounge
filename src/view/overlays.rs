@@ -43,8 +43,20 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     let date = i18n::short_date(now);
     let date_style = style;
     // Until the TV has set its clock (no network since power-on), it reads a default date such
-    // as 1 January: the pill leaves the date and time out rather than show a wrong one.
-    let set = state.clock_set;
+    // as 1 January: the pill leaves the date and time out rather than show a wrong one. With the
+    // big clock on Home the pill leaves them to it: one clock on screen, never two.
+    let big = state.page == Page::Apps && state.preferences.clock != crate::model::ClockStyle::Off;
+    let clock_shown = if state.expanded {
+        0.
+    } else {
+        pill_shown(state)
+    };
+    if big && clock_shown > 0. {
+        let first = out.draw.len();
+        super::clock::big_clock(out, state, assets, now);
+        out.fade(first, clock_shown, 1.);
+    }
+    let set = state.clock_set && !big;
     let (date_width, clock_width) = if set {
         (
             assets.width(&date, date_style) + 14. * k,
@@ -59,40 +71,62 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     });
     // The avatar: a chosen picture, else the signed-in profile's initial.
     let avatar = state.avatar.is_some() || state.profile.is_some();
-    if !set && temperature.is_none() && !avatar {
-        bar_buttons(out, state, assets, 1836.);
+    // Inputs leads the capsule as a labelled segment Up from the dock reaches, as tvOS's
+    // Control Center sits in its corner: a word as well as a glyph, for every eye.
+    let inputs = state.page == Page::Apps && !state.input_choices().is_empty();
+    let label = i18n::t("inputs");
+    let texts = set || temperature.is_some();
+    if !inputs && !texts && !avatar {
         return;
     }
-    let width =
-        40. * k + date_width + clock_width + extra + if avatar { (14. + 50.) * k } else { 0. };
+    // One even margin all round: the Inputs capsule and the avatar are the same height, inset
+    // from the glass by the same amount, so the pieces sit in it as one set (tvOS's segmented
+    // controls), not loose in a bar.
+    let size = 46. * k;
+    let inset = (PILL_HEIGHT - size) / 2.;
+    let capsule = if inputs {
+        (16. + 30. + 10.) * k + assets.width(label, style) + 20. * k
+    } else {
+        0.
+    };
+    let text_width = date_width + clock_width + extra;
+    let lead = if inputs {
+        inset + 8. * k
+    } else {
+        20. * k - inset
+    };
+    let trail = if avatar { 12. * k } else { 20. * k - inset };
+    let mut width = inset + capsule;
+    if texts {
+        width += lead + text_width + trail;
+    } else if inputs && avatar {
+        width += inset;
+    }
+    if avatar {
+        width += size;
+    }
+    width += inset;
     let pill = Rect::new(1836. - width, 49., width, PILL_HEIGHT);
-    bar_buttons(out, state, assets, pill.x - 16.);
     // Text, icon and avatar sit on the capsule's centre line.
     let line = |height: f32| pill.y + (pill.h - height) / 2.;
     let first = out.draw.len();
-    let fade = pill_shown(state);
+    // A focused segment is always fully there, even while the grid glides back to the top.
+    let focused = state.focus == Target::InputsButton;
+    let fade = if focused { 1. } else { pill_shown(state) };
     // The capsule is glass over whatever is behind it.
     // Clear glass with white ink in both appearances (over the photo).
     let ink = WHITE;
     out.shadow(pill, pill.h / 2., 48., 4., 0.2);
-    // A crisp edge: the capsule never scales, and a feathered one turned soft
-    // once the TV scales the 1080p plane to 4K.
     out.glass_over(
         home_backdrop(state, assets),
         pill,
         pill.h / 2.,
         c(PLATTER, 0.34),
     );
-    // One thin specular rim, as Apple's glass has: bright where light falls,
-    // faint below.
+    // One thin specular rim, as Apple's glass has: bright where light falls, faint below.
     out.rim(pill, pill.h / 2., 0.55, 0.06);
-    let size = 46. * k;
-    let circle = Rect::new(
-        pill.x + pill.w - 30. * k - size / 2.,
-        line(size),
-        size,
-        size,
-    );
+    let circle = Rect::new(pill.x + pill.w - inset - size, line(size), size, size);
+    out.draw.push(Draw::Soft(Some(SOFT_EDGE)));
     if let Some(picture) = &state.avatar {
         // A new picture (rotating, or just chosen) fades in over the last.
         let fade = state.avatar_from.as_ref().map(|(previous, since)| {
@@ -117,9 +151,8 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
             [1., 1., 1., alpha],
         ));
     } else if let Some(profile) = &state.profile {
-        // tvOS ends the menu bar with the profile's avatar: here the signed-in
-        // LG profile's initial on its colour.
-        let circle = circle.inset(-1.);
+        // tvOS ends the menu bar with the profile's avatar: here the signed-in LG profile's
+        // initial on its colour.
         out.shape(circle, circle.w / 2., c(profile.color, 1.));
         out.text(
             profile.initial(),
@@ -130,7 +163,21 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
         );
     }
     out.draw.push(Draw::Soft(None));
-    let mut x = pill.x + 20. * k;
+    if inputs {
+        inputs_segment(
+            out,
+            state,
+            assets,
+            Rect::new(pill.x + inset, line(size), capsule, size),
+            label,
+            style,
+        );
+        if fade <= 0.5 {
+            out.controls
+                .retain(|control| control.target != Target::InputsButton);
+        }
+    }
+    let mut x = pill.x + inset + capsule + lead;
     if set {
         out.text(
             date,
@@ -168,66 +215,54 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     out.fade(first, fade, 1.);
 }
 
-/// The Inputs button beside the time pill: a round glass button with the input glyph. Up from
-/// the dock focuses it; OK opens the Inputs panel.
-fn bar_buttons(out: &mut Scene, state: &State, assets: &Assets, inputs_right: f32) {
-    // A focused button is always fully there, even while the grid glides back to the top.
-    let focused = state.focus == Target::InputsButton;
-    let shown = if focused { 1. } else { pill_shown(state) };
-    if state.page != Page::Apps || shown <= 0. || state.input_choices().is_empty() {
-        return;
-    }
-    let first = out.draw.len();
-    inputs_button(out, state, assets, inputs_right - PILL_HEIGHT);
-    out.fade(first, shown, 1.);
-    if shown <= 0.5 {
-        out.controls
-            .retain(|control| control.target != Target::InputsButton);
-    }
-}
-
-fn inputs_button(out: &mut Scene, state: &State, assets: &Assets, x: f32) {
+/// The pill's Inputs segment: the input glyph and its name. Up from the dock focuses it; OK
+/// opens the Inputs panel. Focused (or with its panel open) it turns into a white capsule with
+/// dark ink inside the glass, as every focused control does.
+fn inputs_segment(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    area: Rect,
+    label: &str,
+    style: crate::renderer::TextStyle,
+) {
     let target = Target::InputsButton;
     let k = PILL_SCALE;
-    let icon = 32. * k;
-    let base = Rect::new(x, 49., PILL_HEIGHT, PILL_HEIGHT);
-    // Lit while its panel is open, as a tile stays lifted under its menu.
-    let focus = if target == Target::InputsButton
-        && matches!(
-            state.overlay,
-            Some(crate::state::Overlay::Inputs | crate::state::Overlay::InputName(_))
-        ) {
+    let focus = if matches!(
+        state.overlay,
+        Some(crate::state::Overlay::Inputs | crate::state::Overlay::InputName(_))
+    ) {
         1.
     } else {
         state.focus_amount(&target)
     };
-    let grow = 0.06 * focus;
-    let rect = Rect::new(
-        base.x - base.w * grow / 2.,
-        base.y - base.h * grow / 2.,
-        base.w * (1. + grow),
-        base.h * (1. + grow),
-    );
-    out.shadow(rect, rect.h / 2., 48., 4. + 8. * focus, 0.2 + 0.15 * focus);
-    out.glass_over(
-        home_backdrop(state, assets),
-        rect,
-        rect.h / 2.,
-        c(PLATTER, 0.34),
-    );
-    out.rim(rect, rect.h / 2., 0.55 * (1. - focus), 0.06 * (1. - focus));
-    // Focused, it turns white with dark ink, as every focused control does.
-    out.shape(rect, rect.h / 2., c(0xffffff, 0.97 * focus));
-    let (rest, lit) = (WHITE, c(PLATTER, 1.));
-    let ink: [f32; 4] = std::array::from_fn(|i| rest[i] + (lit[i] - rest[i]) * focus);
-    let line = |height: f32| rect.y + (rect.h - height) / 2.;
+    let lit = area;
+    out.draw.push(Draw::Soft(Some(SOFT_EDGE)));
+    out.shape(lit, lit.h / 2., c(0xffffff, 0.97 * focus));
+    out.draw.push(Draw::Soft(None));
+    let (rest, dark) = (WHITE, c(PLATTER, 1.));
+    let ink: [f32; 4] = std::array::from_fn(|i| rest[i] + (dark[i] - rest[i]) * focus);
+    let line = |height: f32| area.y + (area.h - height) / 2.;
+    let icon = 30. * k;
     out.icon(
         assets,
         "input-hdmi-bold",
-        Rect::new(rect.x + (rect.w - icon) / 2., line(icon), icon, icon),
+        Rect::new(area.x + 16. * k, line(icon), icon, icon),
         ink,
     );
-    out.control(target, base, false);
+    out.text(
+        label,
+        Rect::new(
+            area.x + (16. + 30. + 10.) * k,
+            line(30. * k),
+            area.w,
+            30. * k,
+        ),
+        style,
+        ink,
+        false,
+    );
+    out.control(target, area, false);
 }
 
 /// The Inputs panel, under the time pill: Live TV, then each input, with whether a device is

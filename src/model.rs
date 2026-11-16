@@ -91,6 +91,21 @@ pub struct Input {
     pub connected: Option<bool>,
 }
 
+impl Input {
+    /// LG's device id for the port (HDMI_2, AV_1, COMP_1), which input names are set on.
+    pub fn device(&self) -> String {
+        if let Some(number) = self.id.strip_prefix("com.webos.app.hdmi") {
+            format!("HDMI_{number}")
+        } else if let Some(number) = self.id.strip_prefix("com.webos.app.externalinput.av") {
+            format!("AV_{number}")
+        } else if self.id == "com.webos.app.externalinput.component" {
+            "COMP_1".into()
+        } else {
+            self.port.replace(' ', "_")
+        }
+    }
+}
+
 /// The signed-in LG account's profile, as LG Home shows it: a nickname and
 /// the colour of its avatar circle. Nothing else about the account is read.
 #[derive(Clone, Debug, PartialEq)]
@@ -152,6 +167,16 @@ pub enum Appearance {
     Auto,
 }
 
+/// The big clock over Home's wallpaper: digital (the Lock Screen's), an analog face, or none
+/// (the status pill then shows the time).
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub enum ClockStyle {
+    #[default]
+    Digital,
+    Analog,
+    Off,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -185,6 +210,8 @@ pub struct Preferences {
     pub avatar: Option<String>,
     #[serde(deserialize_with = "lenient")]
     pub appearance: Appearance,
+    #[serde(deserialize_with = "lenient")]
+    pub clock: ClockStyle,
 }
 
 /// A value this Lounge does not know (written by a newer or older one) falls
@@ -228,6 +255,7 @@ impl Default for Preferences {
             recent: vec![],
             avatar: None,
             appearance: Appearance::Dark,
+            clock: ClockStyle::Digital,
         }
     }
 }

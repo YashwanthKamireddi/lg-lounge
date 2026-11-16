@@ -78,6 +78,10 @@ fn bounds(draw: &Draw) -> Option<Rect> {
             Some(grow(rect, 3.))
         }
         Draw::Shadow(rect, _, blur, _) => Some(grow(rect, blur + 3.)),
+        Draw::Rotated(rect, _, angle, pivot, _) => Some(grow(
+            &crate::renderer::rotated_bounds(*rect, *angle, *pivot),
+            3.,
+        )),
         Draw::Text(_, rect, style, ..) => Some(grow(
             &Rect::new(rect.x, rect.y, rect.w * style.scale, rect.h * style.scale),
             6.,
@@ -120,6 +124,9 @@ fn same(a: &Draw, b: &Draw) -> bool {
         }
         (AppImage(i1, r1, c1), AppImage(i2, r2, c2)) => {
             std::sync::Arc::ptr_eq(i1, i2) && r1 == r2 && c1 == c2
+        }
+        (Rotated(r1, a1, t1, p1, c1), Rotated(r2, a2, t2, p2, c2)) => {
+            r1 == r2 && a1 == a2 && t1 == t2 && p1 == p2 && c1 == c2
         }
         (Dissolve(a), Dissolve(b)) => a == b,
         (Clip(a), Clip(b)) => a == b,
