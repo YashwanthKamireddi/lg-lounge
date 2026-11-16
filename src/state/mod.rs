@@ -31,8 +31,8 @@ pub fn section_settings(section: usize) -> &'static [usize] {
     match section {
         // Clock format, Lounge as Home, Hidden apps, Quit.
         GENERAL_SECTION => &[1, 10, 7, 5],
-        // Appearance, app names, cover art, profile picture.
-        HOME_SECTION => &[9, 0, 6, 8],
+        // Clock, appearance, app names, cover art, profile picture.
+        HOME_SECTION => &[13, 9, 0, 6, 8],
         // Larger names, focus outline, reduced motion.
         ACCESS_SECTION => &[12, 11, 2],
         _ => &[],
@@ -201,6 +201,7 @@ pub enum Overlay {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Subpage {
     Clock,
+    BigClock,
     WeatherLocation,
     Temperature,
     Hidden,
@@ -443,6 +444,11 @@ pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// The appearance choices, in Settings' order (as tvOS lists them).
 pub const APPEARANCES: [Appearance; 3] = [Appearance::Light, Appearance::Dark, Appearance::Auto];
+pub const CLOCK_STYLES: [crate::model::ClockStyle; 3] = [
+    crate::model::ClockStyle::Digital,
+    crate::model::ClockStyle::Analog,
+    crate::model::ClockStyle::Off,
+];
 /// The avatar preference that shows every picture in turn.
 pub const AVATAR_ROTATE: &str = "rotate";
 
@@ -838,6 +844,15 @@ impl State {
     /// ending, the profile picture turning, a slow launch being announced. The event loop
     /// sleeps that long (or until an event comes) instead of polling. Only timers still ahead
     /// count: one already due is handled on this pass.
+    /// The analog clock's sweeping second hand is on screen: Home draws every refresh for it.
+    pub fn ticking(&self) -> bool {
+        self.preferences.clock == crate::model::ClockStyle::Analog
+            && self.page == Page::Apps
+            && !self.expanded
+            && self.overlay.is_none()
+            && self.shown_scroll < GRID_SCROLL * 0.5
+    }
+
     pub fn quiet_for(&self) -> Option<Duration> {
         let mut soonest: Option<Duration> = None;
         let mut due = |since: &Instant, after: Duration| {

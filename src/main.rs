@@ -802,6 +802,10 @@ impl Shell {
             self.state.hour = now.hour();
             self.state.dirty = true;
         }
+        // The analog face's second hand sweeps while it shows: a frame at every refresh.
+        if self.state.ticking() {
+            self.state.dirty = true;
+        }
         // The TV set its clock (network back after power-on): the time appears at once.
         let clock_set = time_format::time_valid();
         if self.state.clock_set != clock_set {
@@ -1454,6 +1458,7 @@ impl Shell {
                 // Repaint only what changed since the buffer was last drawn
                 // (EGL partial update); anything uncertain repaints it all.
                 self.renderer.damage = self.partial.region(&self.scene.draw, width, height);
+                self.renderer.pinned = view::resident(&self.state, &self.assets);
                 let drawing = Instant::now();
                 self.renderer.render(&self.scene.draw, width, height);
                 let draw_ms = drawing.elapsed().as_millis();
@@ -1577,9 +1582,15 @@ impl Shell {
         let mut soonest = CAP;
         let mut due = |left: Duration| soonest = soonest.min(left);
         if on_screen {
-            let second = OffsetDateTime::now_utc().unix_timestamp().rem_euclid(60) as u64;
-            // Just past the minute, so the new minute is what is drawn.
-            due(Duration::from_secs(60 - second) + Duration::from_millis(20));
+            // Just past the next minute, to the nanosecond: the new time is drawn the moment it
+            // begins. The analog face's sweep wants every refresh.
+            let into = OffsetDateTime::now_utc().unix_timestamp_nanos();
+            let period: i128 = 60_000_000_000;
+            let left = (period - into.rem_euclid(period)) as u64;
+            due(Duration::from_nanos(left) + Duration::from_millis(5));
+            if self.state.ticking() {
+                due(Duration::from_millis(15));
+            }
             if let Some(quiet) = self.state.quiet_for() {
                 due(quiet);
             }

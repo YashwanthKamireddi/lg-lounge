@@ -64,6 +64,10 @@ pub(super) fn input_icon(input: &Input) -> &'static str {
         .any(|part| name.contains(part))
     {
         "streamer"
+    } else if input.id.starts_with("com.webos.app.externalinput.av") {
+        "av"
+    } else if input.id == "com.webos.app.externalinput.component" {
+        "component"
     } else {
         "hdmi"
     }

@@ -60,6 +60,7 @@ impl State {
         self.pointer = false;
         self.focus = match self.subpage.take() {
             Some(Subpage::Clock) => Target::Setting(1),
+            Some(Subpage::BigClock) => Target::Setting(13),
             Some(Subpage::WeatherLocation) => Target::WeatherLocation,
             Some(Subpage::Temperature) => Target::WeatherTemperature,
             // Its row goes once nothing is hidden; focus takes the row above it.
@@ -235,6 +236,7 @@ impl State {
             if let Target::Choice(index) = self.focus {
                 let count = match self.subpage {
                     Some(Subpage::Clock | Subpage::Temperature) => 2,
+                    Some(Subpage::BigClock) => CLOCK_STYLES.len(),
                     Some(Subpage::Appearance) => APPEARANCES.len(),
                     Some(Subpage::Hidden) => self.hidden_count().max(1),
                     // The pictures, then "From your phone".
@@ -380,8 +382,8 @@ impl State {
                     // scrolls it into view, without letting the fixed nav steal Up.
                     let next = match direction {
                         // A held Up stops at the dock, as tvOS stops a held arrow at an edge:
-                        // scrolling up the grid never runs on into Top Shelf and the Inputs
-                        // button. A new press goes on.
+                        // it never runs on into Top Shelf and the Inputs button. A new press
+                        // goes on.
                         Direction::Up if index < APPS_COLUMNS && self.held => None,
                         // Up from the dock: Top Shelf full screen first for an app with art
                         // (Down returns), then the Inputs button beside the time pill. Only

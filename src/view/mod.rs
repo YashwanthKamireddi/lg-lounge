@@ -5,6 +5,7 @@
 //! context menu, search keyboard, notifications and hints), with the pieces
 //! they share in `scene` (the draw list), `tile`, `glass` and `shared`.
 mod alert;
+mod clock;
 mod glass;
 mod home;
 mod overlays;
@@ -202,6 +203,30 @@ impl Assets {
 const SWITCHER_VEIL: f32 = 0.38;
 /// The grid's backdrop tint, the same clear, dimmed glass in both appearances.
 const GRID_TINT: Color = [GRID_VEIL, GRID_VEIL, GRID_VEIL + 0.02, 1.];
+
+/// The pictures Home shows at rest: the dock's Top Shelf art (or the wallpaper) and its glass.
+/// The renderer keeps them on the GPU while the grid or Settings covers them.
+pub fn resident(state: &State, assets: &Assets) -> Vec<String> {
+    let (picture, glass) = glass::shelf_art(state, assets, state.shelf_app.as_deref());
+    let mut keep = vec![picture, glass];
+    let background = state.wallpaper();
+    for path in [
+        assets.wallpaper(background, ".jpg"),
+        assets.wallpaper(background, "-home-glass.png"),
+    ] {
+        if !keep.contains(&path) {
+            keep.push(path);
+        }
+    }
+    keep
+}
+
+/// How far a closing panel has faded, `t` of the way through: an even S-curve. The shrink eases
+/// out, but an eased-out fade dropped most of the panel in two frames and left a faint slab
+/// hanging for the rest, which read as slow.
+fn leaving(t: f32) -> f32 {
+    t * t * (3. - 2. * t)
+}
 
 /// A wallpaper's blurred backdrop (Settings, the grid, the switcher).
 fn blurred(assets: &Assets, wallpaper: &str) -> String {
@@ -478,7 +503,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             let (cx, cy) = tile.center();
             out.scale_about(start, cx, cy, 1. - 0.18 * gone);
         }
-        out.fade(start, 1. - gone, 1.);
+        out.fade(start, 1. - leaving(t), 1.);
     }
     // Back: the Inputs panel shrinks back into its button as it fades, the reverse of opening.
     if state.overlay.is_none()
@@ -499,7 +524,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             let (cx, _) = button.center();
             out.scale_about(start, cx, button.y + button.h, 1. - 0.14 * gone);
         }
-        out.fade(start, 1. - gone, 1.);
+        out.fade(start, 1. - leaving(t), 1.);
     }
     if let Some(
         overlay @ (Overlay::Options { .. }

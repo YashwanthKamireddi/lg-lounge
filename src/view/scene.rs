@@ -114,6 +114,12 @@ impl Scene {
                     rect.x += dx;
                     rect.y += dy;
                 }
+                Draw::Rotated(rect, _, _, pivot, _) => {
+                    rect.x += dx;
+                    rect.y += dy;
+                    pivot.0 += dx;
+                    pivot.1 += dy;
+                }
                 // Full-screen opaque backdrops neither move nor fade with content.
                 Draw::Clip(_) | Draw::EdgeFade(_) | Draw::Soft(_) | Draw::Dissolve(..) => {}
             }
@@ -146,6 +152,11 @@ impl Scene {
                     place(rect);
                     *radius *= factor;
                     *blur *= factor;
+                }
+                Draw::Rotated(rect, radius, _, pivot, _) => {
+                    place(rect);
+                    *radius *= factor;
+                    *pivot = (cx + (pivot.0 - cx) * factor, cy + (pivot.1 - cy) * factor);
                 }
                 Draw::RoundedGradient(rect, radius, ..)
                 | Draw::Image(_, rect, radius, _)
@@ -255,6 +266,7 @@ impl Scene {
             };
             match draw {
                 Draw::Shape(_, _, _, color)
+                | Draw::Rotated(_, _, _, _, color)
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)

@@ -43,13 +43,14 @@ void main() {
     // plane to 4K. Only broad glass (the dock, menus) bends light.
     float lens = radius < 48.0 ? 0.0 : 1.0;
     // Inside the band's inner edge the backdrop shows straight through:
-    // most of every pane skips the lens maths.
-    if (max(q.x, q.y) < radius - band - u_aa) {
+    // most of every pane skips the lens maths. Measured to the rounded
+    // outline: a square test let a round pane's corners (a clock face) through.
+    vec2 outside = max(q, vec2(0.0));
+    float d = length(outside) + min(max(q.x, q.y), 0.0) - radius;
+    if (d < -band - u_aa) {
         gl_FragColor = backdrop(v_uv) * v_color * vec4(1.0, 1.0, 1.0, edge_coverage());
         return;
     }
-    vec2 outside = max(q, vec2(0.0));
-    float d = length(outside) + min(max(q.x, q.y), 0.0) - radius;
     // The outward normal: radial on a corner, straight out along a side.
     vec2 normal = max(outside.x, outside.y) > 0.0
         ? normalize(outside)

@@ -399,6 +399,14 @@ fn appearance_label(appearance: Appearance) -> (&'static str, Option<&'static st
     }
 }
 
+fn clock_label(style: crate::model::ClockStyle) -> &'static str {
+    match style {
+        crate::model::ClockStyle::Digital => "clockDigital",
+        crate::model::ClockStyle::Analog => "clockAnalog",
+        crate::model::ClockStyle::Off => "stateOff",
+    }
+}
+
 /// One row of a Settings list: its setting, its name, what it is set to, and whether it opens a
 /// page of its own.
 struct RowSpec {
@@ -503,6 +511,12 @@ fn section_rows(state: &State, section: usize) -> Vec<RowSpec> {
                     on_off(state.preferences.focus_outline),
                     false,
                 ),
+                13 => spec(
+                    13,
+                    "bigClock",
+                    Some(i18n::t(clock_label(state.preferences.clock)).to_owned()),
+                    true,
+                ),
                 12 => spec(
                     12,
                     "largeNames",
@@ -532,6 +546,7 @@ pub(super) fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let title = match (&state.subpage, root) {
         (_, true) => i18n::t("settings"),
         (Some(Subpage::Clock), _) => i18n::t("clockFormat"),
+        (Some(Subpage::BigClock), _) => i18n::t("bigClock"),
         (Some(Subpage::Appearance), _) => i18n::t("appearance"),
         (Some(Subpage::Hidden), _) => i18n::t("hiddenApps"),
         (Some(Subpage::Avatar), _) => i18n::t("profilePicture"),
@@ -810,6 +825,16 @@ fn settings_list(out: &mut Scene, state: &State, assets: &Assets) {
                 (i18n::t("hour12"), None, !state.hour_24),
                 (i18n::t("hour24"), None, state.hour_24),
             ],
+            Subpage::BigClock => crate::state::CLOCK_STYLES
+                .iter()
+                .map(|style| {
+                    (
+                        i18n::t(clock_label(*style)),
+                        None,
+                        state.preferences.clock == *style,
+                    )
+                })
+                .collect(),
             Subpage::Temperature => vec![
                 (
                     i18n::t("celsius"),

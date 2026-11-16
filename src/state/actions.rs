@@ -186,6 +186,18 @@ impl State {
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
+                    13 => {
+                        self.subpage = Some(Subpage::BigClock);
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(crate::clock::now());
+                        }
+                        let index = CLOCK_STYLES
+                            .iter()
+                            .position(|style| *style == self.preferences.clock)
+                            .unwrap_or(0);
+                        self.focus = Target::Choice(index);
+                        return vec![];
+                    }
                     11 => self.preferences.focus_outline = !self.preferences.focus_outline,
                     12 => self.preferences.large_names = !self.preferences.large_names,
                     9 => {
@@ -272,6 +284,9 @@ impl State {
                     }
                     Some(Subpage::Appearance) => {
                         self.preferences.appearance = APPEARANCES[index.min(APPEARANCES.len() - 1)];
+                    }
+                    Some(Subpage::BigClock) => {
+                        self.preferences.clock = CLOCK_STYLES[index.min(CLOCK_STYLES.len() - 1)];
                     }
                     Some(Subpage::Temperature) => {
                         self.preferences.temperature_unit = if index == 1 {
@@ -393,8 +408,7 @@ impl State {
                 else {
                     return vec![];
                 };
-                // HDMI_<n>, LG's device id, from the port "HDMI <n>".
-                let device = input.port.replace(' ', "_");
+                let device = input.device();
                 let (name, icon) = match index {
                     0 => (input.port.clone(), format!("{device}.png")),
                     _ => {

@@ -521,9 +521,16 @@ fn the_clock_format_is_the_tvs_own_setting() {
             })
             .collect::<Vec<_>>()
     };
+    // The big clock (Home's default) follows it, without AM/PM beside its large figures...
     assert!(shown(&state).iter().any(|line| line == "13:00"));
     state.hour_24 = false;
+    assert!(shown(&state).iter().any(|line| line == "1:00"));
+    // ...and with it off the pill shows the time instead: one clock on screen, never two.
+    assert!(!shown(&state).iter().any(|line| line == "1:00 PM"));
+    state.preferences.clock = crate::model::ClockStyle::Off;
     assert!(shown(&state).iter().any(|line| line == "1:00 PM"));
+    state.hour_24 = true;
+    assert!(shown(&state).iter().any(|line| line == "13:00"));
 }
 
 #[test]
@@ -1906,6 +1913,7 @@ fn an_uninstall_removes_the_tile_at_once_and_only_success_forgets_it() {
 #[test]
 fn the_time_pill_leaves_out_the_date_and_time_until_the_tv_has_set_its_clock() {
     let mut state = ready();
+    state.preferences.clock = crate::model::ClockStyle::Off;
     let clock = crate::i18n::clock(time::OffsetDateTime::UNIX_EPOCH, state.hour_24);
     assert!(ui_text(&state).contains(&clock));
     state.clock_set = false;
