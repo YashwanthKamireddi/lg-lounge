@@ -36,14 +36,15 @@ the GPU directly and does nothing when nothing changes.
 
 ## Architecture
 
-```
-            ┌──────────────── lounge (one process) ────────────────┐
- remote ──▶ │ SDL events ─▶ State ─▶ View ─▶ draw list ─▶ OpenGL ES │ ──▶ TV graphics plane
-            │      ▲                                                │
-            │      │ wake (one coalesced event)                     │
-            │ workers: Luna subscriptions · image decode ·          │
-            │          weather · phone photo server                 │
-            └───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    R[Remote] --> E[SDL events]
+    E --> S[State]
+    S --> V[View]
+    V --> D[Draw list]
+    D --> G[OpenGL ES]
+    G --> P[TV graphics plane]
+    W[Workers: Luna subscriptions, image decoding, weather, phone photos] -. one coalesced wake .-> E
 ```
 
 - **State** holds what is on screen and what each remote press does. It is plain data with no I/O,
