@@ -113,8 +113,7 @@
 
 ## 1.0.0
 
-The first release of Lounge, a fork of [lg-luma](https://github.com/ecklf/lg-luma) 2.1.0
-(its history is in [lg-luma's changelog](https://github.com/ecklf/lg-luma/blob/main/CHANGELOG.md)).
+The first release of Lounge.
 
 - Power-on lands on Lounge: it stays resident through standby and takes the screen at wake.
 - The Home key from an app shows Lounge at once (it waited up to 2 s for the next event pump).

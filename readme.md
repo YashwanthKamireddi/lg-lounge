@@ -4,7 +4,7 @@
 
 # Lounge
 
-**The home screen I wanted on my LG TV.**
+**A native home screen for rooted LG webOS TVs, written in Rust.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/YashwanthKamireddi/lounge/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/YashwanthKamireddi/lounge/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/YashwanthKamireddi/lounge?label=release&color=3b4590)](https://github.com/YashwanthKamireddi/lounge/releases/latest)
@@ -13,22 +13,30 @@
 
 <img src="docs/readme/demo.webp" alt="Lounge in motion: the glass dock, the app grid and the Inputs panel on an LG TV" width="100%">
 
-[Install](#install) · [What's in it](#whats-in-it) · [How it works](#how-it-works) · [Build](#build)
+[Install](#install) · [Screens](#screens) · [How it works](#how-it-works) · [Build](#build)
 
 </div>
 
-## Why I made it
+## Overview
 
-I wanted my TV to work like an Apple TV: press Home, see my apps, pick one. LG's Home put a lot
-between me and that, and it took a moment every time I pressed Home. So I built Lounge for my own
-TV, and it's been my Home every day since.
+Lounge replaces LG's Home with a single native binary that draws with OpenGL ES 2.0. It shows a
+dock of five apps over a wallpaper, every other app in a grid below, and a bar with Search and the
+TV's inputs. It runs as the TV's real Home: the Home button opens it, and it resumes instead of
+restarting.
 
-On my TV (an LG 65UQ801C0SB on webOS 22), pressing Home inside an app brings Lounge back in about
-a tenth of a second, and from a cold start its first frame is up in under half a second. While
-you watch something it keeps very little memory for itself (about 25 MB here, where LG's Home
-keeps about 113 MB), so the app you're in gets the rest. Your TV will have its own numbers.
+Measured on the test TV (LG 65UQ801C0SB, webOS 22, Mali-G52):
 
-## What's in it
+| Metric                             | Value                                      |
+| ---------------------------------- | ------------------------------------------ |
+| First frame from a cold start      | 0.46 s                                     |
+| Back to Home from an app           | about 0.1 s                                |
+| Frame pacing, scrolling the grid   | 16.7 ms mean, 0 slow frames in 600 (1080p) |
+| CPU while idle on Home             | 0 ticks over 60 s (6 wake-ups)             |
+| Own memory on Home / behind an app | about 25 MB / about 11 MB                  |
+
+Other TVs will measure differently; `tools/tv-bench.sh` measures your own.
+
+## Screens
 
 <table>
   <tr>
@@ -93,6 +101,12 @@ Lounge is one native Rust binary that draws straight to the TV's graphics plane 
   to 24), or a Home manifest pointing at Lounge is mounted (webOS 25 and 26). Pressing Home brings
   back the running Lounge instead of starting a new one. A crash loop gives Home back to LG, and
   turning it off only ever needs the remote.
+- **Cold boot.** A Homebrew Channel boot hook mounts Lounge once LG's Home has started, drops
+  LG Home's saved RAM image so it can't come back, and opens Home over the input webOS starts
+  (following the TV's Home Auto Launch setting).
+- **Photos from a phone.** Only while its QR code is on screen, a small HTTP server listens on
+  the TV's LAN address behind a random token; the phone frames the photo and sends a JPEG, and
+  the TV decodes it again and bakes the shading and glass backdrops itself.
 - **Kept honest by CI.** Every screen is rendered headless, and a change that paints more than
   3.25 screens per frame, or holds more than 64 MB of artwork or 8 MB of text, fails the build.
 
@@ -103,8 +117,7 @@ Lounge is one native Rust binary that draws straight to the TV's graphics plane 
 Lounge runs on LG TVs from 2020 on: webOS 5 and 6, then webOS 22 to 26 (LG names these by year;
 inside they are versions 7 to 11). It picks the right way to become Home on each by itself.
 
-I use it every day on webOS 22 (version 7.6). The other versions are covered by tests, not yet
-by real TVs, so reports are very welcome. If a TV can't have Lounge as its Home, Settings says
+It is used daily on webOS 22 (version 7.6); the other versions are covered by tests. If a TV can't have Lounge as its Home, Settings says
 why, and Lounge still opens as an app.
 
 ## Known limits
@@ -113,12 +126,13 @@ why, and Lounge still opens as an app.
   before any homebrew can run.
 - English only for now.
 
-Found a bug or tried it on another TV? [Open an issue](https://github.com/YashwanthKamireddi/lounge/issues).
+Bugs and reports from other TVs: [issues](https://github.com/YashwanthKamireddi/lounge/issues).
 
 ## Privacy
 
 No telemetry and no accounts. Settings stay on the TV, and the only network requests are for the
-weather (Open-Meteo, OpenStreetMap). Lounge writes no log files unless you switch diagnostics on
+weather (Open-Meteo, OpenStreetMap). The phone photo server listens only while its QR code is on
+screen. Lounge writes no log files unless you switch diagnostics on
 by creating `/var/lib/lounge/debug`. Rooting is your call, and Lounge comes without warranty (see
 the [license](license)).
 
@@ -135,7 +149,6 @@ pnpm dev           # desktop preview with sample apps
 
 [development.md](development.md) covers the architecture, tests, diagnostics and releases.
 
-## Credits
+## License
 
-Started as a fork of [Luma](https://github.com/ecklf/lg-luma) by ecklf and contributors (MIT,
-notice kept in the [license](license)). Not affiliated with LG, Apple or any app brand shown.
+MIT. See [license](license). Not affiliated with LG, Apple or any app brand shown.
