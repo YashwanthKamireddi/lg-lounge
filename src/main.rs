@@ -1019,6 +1019,9 @@ impl Shell {
             }
             Event::User { type_, code, .. } if type_ == self.home_type && code == APP_IN_FRONT => {
                 self.state.launch_arrived();
+                if let Some(front) = platform::front_app() {
+                    pending.extend(self.state.app_reached_front(&front));
+                }
                 if self.app_covers() {
                     self.leave_for_update();
                 }

@@ -503,6 +503,18 @@ impl State {
     /// way back from an app the home stays as it was left, with anything that
     /// was still open closed.
     pub fn home_key(&mut self, in_front: bool) {
+        // Home pressed while an app is still opening: the owner changed their mind. The launch
+        // is called off (the app is closed as it arrives), as Home always wins on the remote.
+        if let Some((id, at)) = self.launch_pending.take()
+            && crate::clock::since(at) < LAUNCH_CANCEL_WINDOW
+        {
+            self.launching = false;
+            self.launch_started = None;
+            self.launch_arrived();
+            self.launch_cancelled = Some((id.clone(), at));
+            self.queued.push(Effect::Close(id));
+            self.dirty = true;
+        }
         let open = self.page == Page::Settings
             || self.overlay.is_some()
             || self.switcher.is_some()
@@ -517,6 +529,21 @@ impl State {
         self.switcher = None;
         self.expanded = false;
         self.open(1);
+    }
+
+    /// `front` reached the screen: an app whose launch Home called off is closed again.
+    pub fn app_reached_front(&mut self, front: &str) -> Vec<Effect> {
+        match self.launch_cancelled.take() {
+            Some((id, at)) if crate::clock::since(at) < LAUNCH_CANCEL_WINDOW => {
+                if id == front {
+                    vec![Effect::Close(id)]
+                } else {
+                    self.launch_cancelled = Some((id, at));
+                    vec![]
+                }
+            }
+            _ => vec![],
+        }
     }
 
     /// The remote's Recent key: the App Switcher, from the home screen only

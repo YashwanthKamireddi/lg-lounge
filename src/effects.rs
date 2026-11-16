@@ -64,6 +64,7 @@ pub(crate) fn effects(
                         .find(|a| a.id == id)
                         .map_or(id.clone(), |app| app.title.clone());
                     state.launch_waiting = Some((title, crate::clock::now(), 0));
+                    state.launch_pending = Some((id.clone(), crate::clock::now()));
                     platform.send(Request::Launch(id));
                 } else {
                     let title = state

@@ -39,6 +39,8 @@ pub fn section_settings(section: usize) -> &'static [usize] {
     }
 }
 pub const APPS_COLUMNS: usize = 5;
+/// How long after asking for an app a Home press still calls the launch off.
+pub const LAUNCH_CANCEL_WINDOW: Duration = Duration::from_secs(15);
 /// The lowest a focused Settings row reaches: above the list's fade into its bottom edge.
 pub const SETTINGS_LIST_END: f32 = 968. - 64. - 8.;
 pub const HOME_STRIP_LEFT: f32 = 84.;
@@ -338,6 +340,12 @@ pub struct State {
     /// An app asked to open that has not yet taken the screen: its name, when it was asked
     /// for, and how much has been said about it (see `say_launch_progress`).
     pub launch_waiting: Option<(String, Instant, u8)>,
+    /// The app a launch is on its way to, and when it was asked for: Home pressed before it
+    /// reaches the screen cancels it.
+    pub launch_pending: Option<(String, Instant)>,
+    /// A launch Home called off: if the app still reaches the screen (the close raced its
+    /// start), it is closed then.
+    pub launch_cancelled: Option<(String, Instant)>,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
     /// Inventory loads that failed in a row while no apps were shown yet.
@@ -534,6 +542,8 @@ impl State {
             launching: false,
             launch_started: None,
             launch_waiting: None,
+            launch_pending: None,
+            launch_cancelled: None,
             notice: None,
             error: None,
             inventory_failures: 0,
@@ -1204,6 +1214,7 @@ impl State {
 
     /// The app took the screen (or Lounge left it): nothing more to say about the launch.
     pub fn launch_arrived(&mut self) {
+        self.launch_pending = None;
         if self
             .launch_waiting
             .take()

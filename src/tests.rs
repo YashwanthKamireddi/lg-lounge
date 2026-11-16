@@ -2330,3 +2330,25 @@ fn a_home_change_that_went_through_is_never_reported_as_failed_and_the_switch_ne
     let effects = state.activate();
     assert!(matches!(effects.as_slice(), [Effect::TvHome(Some(false))]));
 }
+
+#[test]
+fn home_pressed_while_an_app_opens_calls_the_launch_off() {
+    let mut state = ready();
+    state.launching = true;
+    state.launch_pending = Some(("netflix".into(), crate::clock::now()));
+    state.home_key(true);
+    assert!(!state.launching);
+    assert!(state.queued.contains(&Effect::Close("netflix".into())));
+    // It arrived anyway: closed again; another app reaching the front is left alone.
+    assert!(state.app_reached_front("youtube.leanback.v4").is_empty());
+    assert_eq!(
+        state.app_reached_front("netflix"),
+        vec![Effect::Close("netflix".into())]
+    );
+    assert!(state.app_reached_front("netflix").is_empty());
+    // Once an app is on screen, Home just returns to Lounge.
+    state.launch_pending = None;
+    state.queued.clear();
+    state.home_key(true);
+    assert!(state.queued.is_empty());
+}
