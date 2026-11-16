@@ -29,7 +29,7 @@ DIRS='/media/developer/apps/usr/palm/applications/io.github.yashwanthkamireddi.l
 APP=io.github.yashwanthkamireddi.lounge
 COMMAND=${1:-boot}
 case "$COMMAND" in
-  enable|disable|status|apply|refresh|boot) ;;
+  enable|disable|status|apply|refresh|boot|early) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR [HOME_ID]] | disable | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' '{"returnValue":false,"errorText":"Run as root"}'; exit 1; }
@@ -60,6 +60,16 @@ manifest_mounted() {
   awk -v dir="$APPS/$1" '$5 == dir && $4 !~ "/lounge/app(//deleted)?$" { found = 1 }
     index($5, dir "/") == 1 { found = 1 } END { exit !found }' "$MOUNTS"
 }
+if [ "$COMMAND" = early ]; then
+  # From lounge-early, about 18 s into a cold boot (src/bin/lounge-early.rs): mount Lounge and
+  # stop LG's Home, nothing launched (the key filter opens Home). Its exit code is the answer.
+  grep -q '"enabled": true' "$STATE/home.json" 2>/dev/null || exit 1
+  APP_DIR=$(saved)
+  [ -n "$APP_DIR" ] && [ -x "$APP_DIR/lounge" ] || exit 1
+  exec 9>"$LOCK"
+  flock -w 20 9 || exit 1
+  exec "$APP_DIR/lounge" --home early </dev/null >>"$BOOT_LOG" 2>&1
+fi
 if [ "$COMMAND" = boot ]; then
   # Nothing at all happens at boot unless Lounge is enabled as Home and still installed.
   grep -q '"enabled": true' "$STATE/home.json" 2>/dev/null || exit 0

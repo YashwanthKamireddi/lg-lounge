@@ -81,6 +81,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     throw new Error('The IPK is missing its vector artwork manifest.');
   for (const required of [
     manifest.main,
+    'lounge-early',
     manifest.icon,
     manifest.largeIcon,
     'lib/libSDL2-2.0.so.0',
@@ -150,7 +151,10 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
   for (const file of owned) {
     if (!['', '0', '5'].includes(file.type))
       throw new Error(`Unexpected package entry type: ${file.name}`);
-    const executable = file.type === '5' || file.name.endsWith(`/${manifest.main}`);
+    const executable =
+      file.type === '5' ||
+      file.name.endsWith(`/${manifest.main}`) ||
+      file.name.endsWith('/lounge-early');
     file.header.write(executable ? '0000755\0' : '0000644\0', 100, 8, 'ascii');
     file.header.fill(32, 148, 156);
     const sum = file.header.reduce((total, byte) => total + byte, 0);

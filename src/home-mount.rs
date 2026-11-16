@@ -59,6 +59,67 @@ fn exe_of(id: &str) -> String {
     format!("/usr/bin/{id}")
 }
 
+// The early cold-boot start (src/bin/lounge-early.rs, tv/home-filter.js). ls-hubd reads these
+// volatile LS2 folders at core-boot-done and starts dynamic services as root, so the compositor
+// key filter can have Lounge mounted ~20 s before the Homebrew hook runs.
+const EARLY: &str = "com.webos.service.loungehome";
+// A copy beside home.sh: ls-hubd does not deliver the system key filter's calls to programs under
+// /media/developer.
+const EARLY_EXE: &str = "/var/lib/lounge/lounge-early";
+const EARLY_FILTER: &str = "/var/lib/lounge/home-filter.js";
+const FILTER_HANDLER: &str = "loungeHomeKey";
+const FILTER_TARGET: &str = "var loungeHomeTarget = 'com.webos.app.home';";
+
+/// lounge-early's LS2 definitions: a dynamic service, its role bound to the executable, one
+/// method in API group "all" (the only group LG grants com.webos.starfish.keyfilters), callable
+/// by the key filter alone.
+fn early_files() -> std::collections::BTreeMap<String, String> {
+    let ls2 = "/var/luna-service2";
+    let service = format!("{ls2}/services.d/{EARLY}.service");
+    let role = format!("{ls2}/roles.d/{EARLY}.json");
+    let api = format!("{ls2}/api-permissions.d/{EARLY}.json");
+    let manifest = format!("{ls2}/manifests.d/{EARLY}.json");
+    let line = |value: Value| format!("{value}\n");
+    std::collections::BTreeMap::from([
+        (
+            service.clone(),
+            format!("[D-BUS Service]\nName={EARLY}\nExec={EARLY_EXE}\nType=dynamic\n"),
+        ),
+        (
+            role.clone(),
+            line(json!({
+                "exeName": EARLY_EXE,
+                "type": "regular",
+                "allowedNames": [EARLY],
+                "permissions": [{"service": EARLY, "inbound": ["com.webos.starfish.keyfilters"], "outbound": []}],
+            })),
+        ),
+        (
+            api.clone(),
+            line(json!({"all": [format!("{EARLY}/prepare")]})),
+        ),
+        (
+            manifest,
+            line(json!({
+                "id": EARLY,
+                // ls-hubd silently drops a manifest whose version is not x.y.z.
+                "version": "1.0.0",
+                "serviceFiles": [service],
+                "roleFiles": [role],
+                "apiPermissionFiles": [api],
+            })),
+        ),
+    ])
+}
+
+/// The packaged key filter, launching the Home `id`.
+fn filter_source(source: &str, id: &str) -> Result<String, String> {
+    if source.matches(FILTER_TARGET).count() != 1 {
+        return Err("home-filter.js has no Home target line".into());
+    }
+    Ok(source.replace(FILTER_TARGET, &format!("var loungeHomeTarget = '{id}';")))
+}
+
 /// LG's image of the Home `id`: in RAM, persistent, and sam's hash of it.
 fn checkpoint_of(id: &str) -> [String; 3] {
     [
@@ -1077,6 +1138,15 @@ impl<S: System> Home<S> {
         }
         settings.enabled = true;
         self.write_json(CONFIG, &settings)?;
+        // The early start, for the way that can have it; without it the hook takes over.
+        let early = settings
+            .app_dir
+            .as_deref()
+            .filter(|_| method == Method::Executable)
+            .map(|dir| (dir, id));
+        if let Err(error) = self.set_early(early) {
+            self.system.log(&format!("early start: {error}"));
+        }
         // A normal Lounge (the one that asked, say) would write the same settings: Home
         // replaces it.
         if let Err(error) = self.close_normal() {
@@ -1090,7 +1160,94 @@ impl<S: System> Home<S> {
             settings.enabled = false;
             self.write_json(CONFIG, &settings)?;
         }
+        if let Err(error) = self.set_early(None) {
+            self.system.log(&format!("early start: {error}"));
+        }
         self.restore()
+    }
+
+    /// About 18 s into a cold boot, from lounge-early (the key filter's call): Lounge mounted
+    /// over LG Home's executable and LG's Home stopped, nothing launched; the key filter opens
+    /// Home. The Homebrew hook (`boot`, ~40 s) still runs and finishes whatever this left.
+    fn early(&self) -> Result<(), String> {
+        self.system.log("early: started");
+        let Some(settings) = self.config()?.filter(|settings| settings.enabled) else {
+            return Err("Lounge is not enabled as Home".into());
+        };
+        let app_dir = settings.app_dir.as_deref().unwrap_or("undefined");
+        if !self.system.exists(&format!("{app_dir}/lounge")) {
+            return Err("Lounge is not installed".into());
+        }
+        if settings.way()?.0 != Method::Executable {
+            return Err("The early start is for the executable Home method".into());
+        }
+        let (_, id) = settings.way()?;
+        self.mount_early(app_dir, id);
+        self.apply(&settings, false)?;
+        self.system.log("early: Lounge is Home");
+        Ok(())
+    }
+
+    /// The early start (lounge-early and the key filter) registered, for the executable method,
+    /// or (`None`) removed. Best effort: without it the Homebrew hook takes over as before.
+    fn set_early(&self, way: Option<(&str, &str)>) -> Result<(), String> {
+        let files = early_files();
+        let configs = self
+            .accepted(
+                "luna://com.webos.service.config/getConfigs",
+                json!({"configNames": [CHAIN]}),
+                "Read the key filter chain",
+            )?
+            .get("configs")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        let chain: Vec<Value> = configs[CHAIN].as_array().cloned().unwrap_or_default();
+        let mut kept: Vec<Value> = chain
+            .iter()
+            .filter(|entry| entry.get("file").and_then(Value::as_str) != Some(EARLY_FILTER))
+            .cloned()
+            .collect();
+        match way {
+            Some((app_dir, id)) => {
+                for directory in [
+                    "/var/luna-service2",
+                    "/var/luna-service2/services.d",
+                    "/var/luna-service2/roles.d",
+                    "/var/luna-service2/api-permissions.d",
+                    "/var/luna-service2/manifests.d",
+                ] {
+                    self.system.make_dir(directory)?;
+                }
+                for (file, text) in &files {
+                    self.system.write(file, text)?;
+                }
+                self.system
+                    .run("/bin/cp", &[&format!("{app_dir}/lounge-early"), EARLY_EXE])?;
+                self.system.run("/bin/chmod", &["755", EARLY_EXE])?;
+                self.system.write(
+                    EARLY_FILTER,
+                    &filter_source(include_str!("../tv/home-filter.js"), id)?,
+                )?;
+                kept.push(json!({"file": EARLY_FILTER, "handler": FILTER_HANDLER}));
+            }
+            None => {
+                for file in files.keys() {
+                    self.system.unlink(file)?;
+                }
+                self.system.unlink(EARLY_EXE)?;
+                self.system.unlink(EARLY_FILTER)?;
+            }
+        }
+        if kept != chain {
+            self.accepted(
+                "luna://com.webos.service.config/setConfigs",
+                json!({"configs": {CHAIN: kept}}),
+                "Update the key filter chain",
+            )?;
+        }
+        self.system
+            .run("/usr/sbin/ls-control", &["scan-volatile-dirs"])
+            .map(|_| ())
     }
 
     /// At boot: the mount first, where it can go before sam starts Home, then the full apply
@@ -1319,6 +1476,7 @@ impl<S: System> Home<S> {
             )?,
             "disable" => self.disable()?,
             "boot" => self.boot()?,
+            "early" => self.early()?,
             "apply" => {
                 let settings = self
                     .config()?

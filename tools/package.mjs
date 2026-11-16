@@ -73,6 +73,13 @@ await fs.mkdir(stage, { recursive: true });
 await fs.mkdir(dist, { recursive: true });
 await fs.copyFile(binary, path.join(stage, manifest.main));
 await fs.chmod(path.join(stage, manifest.main), 0o755);
+// The early cold-boot helper (src/bin/lounge-early.rs); `lounge --home enable` copies it out of
+// the package, where ls-hubd can start it.
+await fs.copyFile(
+  path.join(path.dirname(binary), 'lounge-early'),
+  path.join(stage, 'lounge-early'),
+);
+await fs.chmod(path.join(stage, 'lounge-early'), 0o755);
 await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
   recursive: true,
   filter: (source) =>

@@ -90,6 +90,9 @@ struct State {
     /// The boot manager opens this input in front after this many pauses (late, over Home).
     late_input: Option<(u32, &'static str)>,
     pauses: u32,
+    /// The early start's own steps (files copied, the LS2 rescan, the filter in the chain),
+    /// kept apart from `calls` so each test reads only what it is about.
+    early: Vec<String>,
 }
 
 /// A process started as `argv0` with sam's launch argument.
@@ -139,6 +142,28 @@ impl Fake {
     fn luna(&self, uri: &str, payload: Value) -> Value {
         let mut state = self.0.borrow_mut();
         let method = uri.rsplit('/').next().unwrap();
+        // The early start's chain read and its filter going in or out of the chain.
+        let early_filter = |chain: &Value| {
+            chain.as_array().is_some_and(|entries| {
+                entries
+                    .iter()
+                    .any(|entry| entry["file"] == "/var/lib/lounge/home-filter.js")
+            })
+        };
+        if method == "getConfigs" && payload["configNames"] == json!([CHAIN]) {
+            return json!({"returnValue": true, "configs": {CHAIN: state.chain}});
+        }
+        if method == "setConfigs"
+            && let Some(chain) = payload["configs"].get(CHAIN)
+            && early_filter(chain) != early_filter(&state.chain)
+        {
+            state.early.push(format!(
+                "filter {}",
+                if early_filter(chain) { "on" } else { "off" }
+            ));
+            state.chain = chain.clone();
+            return json!({"returnValue": true});
+        }
         if method == "getForegroundAppInfo" {
             return json!({"returnValue": true, "appId": state.front});
         }
@@ -360,6 +385,13 @@ impl System for Fake {
                 }
                 Ok(String::new())
             }
+            "/bin/cp" | "/bin/chmod" | "/usr/sbin/ls-control" => {
+                self.0
+                    .borrow_mut()
+                    .early
+                    .push(format!("{program} {}", args.join(" ")));
+                Ok(String::new())
+            }
             _ => panic!("Unexpected command {program}"),
         }
     }
@@ -466,6 +498,7 @@ fn tv(options: Options) -> Home<Fake> {
     let old = options.old_home;
     Home::new(Fake(RefCell::new(State {
         home_auto_launch: "on",
+        early: vec![],
         late_input: None,
         pauses: 0,
         front: options.front.into(),
@@ -561,8 +594,16 @@ fn enable_puts_lounge_in_home_place_removes_the_old_home_button_and_opens_home()
     );
     {
         let state = home.state();
-        // LG's own filters and Glasshouse's stay, in order; the Home settings are stock again.
-        assert_eq!(state.chain, json!([glasshouse(), stock_filter()]));
+        // LG's own filters and Glasshouse's stay, in order, with the early start's last; the
+        // old Home filter is gone and the Home settings are stock again.
+        assert_eq!(
+            state.chain,
+            json!([
+                glasshouse(),
+                stock_filter(),
+                {"file": "/var/lib/lounge/home-filter.js", "handler": "loungeHomeKey"}
+            ])
+        );
         assert_eq!(state.idle_app, json!({"appId": HOME}));
         assert!(state.default_apps.is_null());
         assert!(!state.files.contains_key(FILTER));
@@ -1648,5 +1689,46 @@ fn a_cold_boot_opens_lounge_over_an_input_the_boot_manager_opens_late_unless_aut
         !off.calls()
             .iter()
             .any(|call| call == "launch com.webos.app.home")
+    );
+}
+
+#[test]
+fn enable_registers_the_early_start_and_disable_removes_every_part() {
+    let home = tv(Options {
+        normal_running: true,
+        ..Options::default()
+    });
+    home.run("enable").unwrap();
+    let state = home.state();
+    let service = "/var/luna-service2/services.d/com.webos.service.loungehome.service";
+    assert!(state.files[service].contains("Exec=/var/lib/lounge/lounge-early"));
+    let manifest: Value = serde_json::from_str(
+        &state.files["/var/luna-service2/manifests.d/com.webos.service.loungehome.json"],
+    )
+    .unwrap();
+    assert_eq!(manifest["version"], "1.0.0", "ls-hubd drops other versions");
+    assert!(state.files["/var/lib/lounge/home-filter.js"].contains("'com.webos.app.home'"));
+    assert!(state.early.iter().any(|step| step.starts_with("/bin/cp ")));
+    assert!(state.early.contains(&"filter on".to_owned()));
+    assert!(
+        state
+            .early
+            .contains(&"/usr/sbin/ls-control scan-volatile-dirs".to_owned())
+    );
+    // The chain keeps every other filter.
+    let chain = state.chain.as_array().unwrap();
+    assert!(chain.contains(&glasshouse()) && chain.contains(&stock_filter()));
+    drop(state);
+    home.run("disable").unwrap();
+    let state = home.state();
+    assert!(!state.files.contains_key(service));
+    assert!(!state.files.contains_key("/var/lib/lounge/home-filter.js"));
+    assert!(state.early.contains(&"filter off".to_owned()));
+    let chain = state.chain.as_array().unwrap();
+    assert!(chain.contains(&glasshouse()) && chain.contains(&stock_filter()));
+    assert!(
+        !chain
+            .iter()
+            .any(|entry| entry["file"] == "/var/lib/lounge/home-filter.js")
     );
 }
