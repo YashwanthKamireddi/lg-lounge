@@ -141,7 +141,9 @@ impl Remote {
                     Keycode::Left => Direction::Left,
                     _ => Direction::Right,
                 };
+                state.held = repeat;
                 pending = state.direction(direction, controls);
+                state.held = false;
             }
             Keycode::Return | Keycode::KpEnter
                 if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>

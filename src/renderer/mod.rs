@@ -1729,6 +1729,33 @@ impl Renderer {
         pixels.chunks_exact(row).rev().flatten().copied().collect()
     }
 
+    /// Draws `commands` once into a small offscreen target that is never shown. The TV's
+    /// driver finishes preparing a shader for a given state only the first time it draws with
+    /// it: drawn here while Home is idle, that work no longer lands on the first real frame
+    /// (the first scroll into the grid stalled ~40-66 ms on the TV).
+    pub fn warm(&mut self, commands: &[Draw]) {
+        let (width, height) = (192, 108);
+        let image = texture(width, height, &[]);
+        let mut framebuffer = 0;
+        unsafe {
+            gl::GenFramebuffers(1, &mut framebuffer);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                image.id,
+                0,
+            );
+            if gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE {
+                self.render(commands, width, height);
+                gl::Finish();
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::DeleteFramebuffers(1, &framebuffer);
+        }
+    }
+
     /// The authored TV surface rendered off-screen at `size`, as RGBA rows
     /// from the top.
     pub fn capture_pixels(

@@ -286,13 +286,31 @@ pub(super) fn inputs_panel(out: &mut Scene, state: &State, assets: &Assets) {
             row_h,
         )
     };
-    // One highlight, on the focused row. It moves in one step: gliding between rows, mid-way
-    // it cut both rows' text in half and read as a smear.
+    // One highlight, gliding from the row focus left to the focused one, as tvOS's does. The
+    // ink is clipped to it (below), so text under it stays sharp mid-glide.
+    let lit = if state.overlay.is_none() && state.inputs_closed.is_some() {
+        &state.inputs_lit
+    } else {
+        &state.focus
+    };
     let lit_y = choices
         .iter()
         .enumerate()
-        .find(|(index, (id, ..))| state.focus == target(*index, id))
-        .map(|(index, _)| row_rect(index).y);
+        .find(|(index, (id, ..))| *lit == target(*index, id))
+        .map(|(index, _)| row_rect(index).y)
+        .map(|y| {
+            let from = state.focus_move().and_then(|(from, progress)| {
+                choices
+                    .iter()
+                    .enumerate()
+                    .find(|(index, (id, ..))| *from == target(*index, id))
+                    .map(|(index, _)| (row_rect(index).y, progress))
+            });
+            match from {
+                Some((from, progress)) if state.overlay.is_some() => from + (y - from) * progress,
+                _ => y,
+            }
+        });
     if let Some(y) = lit_y {
         let lit = Rect::new(panel.x + pad, y, panel.w - pad * 2., row_h);
         out.shadow(lit, 24., 16., 4., 0.18);

@@ -578,6 +578,8 @@ impl State {
             }
             if matches!(overlay, Overlay::Inputs) && !self.preferences.reduced_motion {
                 self.inputs_closed = Some(crate::clock::now());
+                // Its highlight fades out with the panel, on the row it was on.
+                self.inputs_lit = self.focus.clone();
             }
             self.focus = match overlay {
                 Overlay::Options { restore, .. }
