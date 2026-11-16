@@ -45,7 +45,8 @@ const GRID_PITCH: f32 = HOME_TILE_PITCH;
 const TILE_RADIUS: f32 = 39.;
 /// How much a focused tile grows: enough to read as selected, small enough that it stays a card
 /// of the same family and, in the first column, inside the dock's 16 px padding.
-const FOCUS_SCALE: f32 = 0.09;
+/// How much a focused card grows: tvOS's lift, clear from across the room without a ring.
+const FOCUS_SCALE: f32 = 0.11;
 const DOCK_RADIUS: f32 = 72.;
 const LABEL_GAP: f32 = 26.;
 /// Settings' backdrop: the blurred wallpaper at this brightness (home's is

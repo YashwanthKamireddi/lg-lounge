@@ -83,12 +83,17 @@ pub(super) fn tile(
         out.shadow(
             rect,
             radius,
-            40. + 24. * raise,
-            30. * lift + 14. * raise,
-            0.35 * lift + 0.15 * raise,
+            48. + 24. * raise,
+            36. * lift + 14. * raise,
+            0.55 * lift + 0.15 * raise,
         );
     }
     tile_face(out, assets, app, rect, radius);
+    // Lit from above as it lifts, as tvOS's focused cards are: a bright rim along the top edge
+    // that fades down the sides.
+    if lift > 0. {
+        out.rim(rect, radius, 0.22 * lift, 0.);
+    }
     // Focus outline (Settings › General): the lift alone can be hard to follow from across the
     // room; a white ring fades in with it.
     if state.preferences.focus_outline && lift > 0. {
