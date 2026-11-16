@@ -83,10 +83,20 @@ function loungeHomeOpen() {
 }
 
 // Each wake from standby opens Home again over the input webOS reopens, as LG's Home does.
+// Off is standby or suspend; the screen turned off or the screen saver is not.
+function loungeHomeIsOff(state) {
+  return /standby|suspend|power off/i.test(state);
+}
+
 function loungeHomePowerChanged(state) {
   var was = loungeHomePower;
   loungeHomePower = state;
-  if (state !== 'Active' || !was || was === 'Active' || was === 'Screen Off') return;
+  // Powering off: the next cold boot opens Home first, never the input watched last.
+  if (loungeHomeIsOff(state) && was && !loungeHomeIsOff(was)) {
+    lunaCall.send('com.webos.service.loungehome', '/standby', '{}', function () {});
+    return;
+  }
+  if (state !== 'Active' || !loungeHomeIsOff(was)) return;
   loungeHomeWaking = true;
   loungeHomeLaunches = 0;
   loungeHomeWaitOver = false;

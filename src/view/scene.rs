@@ -107,6 +107,7 @@ impl Scene {
                 | Draw::GradientRing(rect, ..)
                 | Draw::Shadow(rect, ..)
                 | Draw::Text(_, rect, ..)
+                | Draw::GlassText(_, rect, ..)
                 | Draw::Image(_, rect, ..)
                 | Draw::TintedImage(_, rect, ..)
                 | Draw::AppImage(_, rect, _)
@@ -166,7 +167,7 @@ impl Scene {
                     *radius *= factor;
                 }
                 // Laid out in its own box, drawn scaled about the box's top left.
-                Draw::Text(_, rect, style, ..) => {
+                Draw::Text(_, rect, style, ..) | Draw::GlassText(_, rect, style, ..) => {
                     rect.x = cx + (rect.x - cx) * factor;
                     rect.y = cy + (rect.y - cy) * factor;
                     style.scale *= factor;
@@ -269,6 +270,7 @@ impl Scene {
                 | Draw::Rotated(_, _, _, _, color)
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
+                | Draw::GlassText(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
                 | Draw::AppImage(_, _, color) => apply(color),
                 Draw::Glass(_, _, _, top, bottom, _) => {

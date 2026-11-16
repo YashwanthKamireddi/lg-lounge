@@ -9,6 +9,8 @@ use owned_ttf_parser::{AsFaceRef, GlyphId, OutlineBuilder, OwnedFace};
 
 pub struct Font {
     face: OwnedFace,
+    /// How far (in em) a flattened curve may stray from the true one.
+    tolerance: f32,
 }
 
 pub struct LineMetrics {
@@ -23,8 +25,18 @@ pub struct Metrics {
 impl Font {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, String> {
         OwnedFace::from_vec(bytes, 0)
-            .map(|face| Self { face })
+            .map(|face| Self {
+                face,
+                tolerance: 0.15 / 64.,
+            })
             .map_err(|e| e.to_string())
+    }
+
+    /// For figures drawn far larger than text (the big clock): the default flattening, made for
+    /// 90 px at most, strays over a pixel at 470 px and the curves show facets.
+    pub fn fine(mut self) -> Self {
+        self.tolerance = 0.15 / 512.;
+        self
     }
 
     pub fn lookup_glyph_index(&self, character: char) -> u16 {
@@ -87,7 +99,7 @@ impl Font {
         // 256 px/em geometry only in single anti-aliased edge pixels (no
         // visible change at 6x zoom). It cut glyphs from 506 to 323 vertices
         // on average (a Settings page: 33.3k to 20.7k text triangles).
-        geometry::tessellate(&outline.builder.build(), 0.15 / 64., FillRule::NonZero)
+        geometry::tessellate(&outline.builder.build(), self.tolerance, FillRule::NonZero)
     }
 }
 

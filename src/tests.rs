@@ -516,7 +516,8 @@ fn the_clock_format_is_the_tvs_own_setting() {
             .draw
             .into_iter()
             .filter_map(|draw| match draw {
-                crate::renderer::Draw::Text(value, ..) => Some(value),
+                crate::renderer::Draw::Text(value, ..)
+                | crate::renderer::Draw::GlassText(value, ..) => Some(value),
                 _ => None,
             })
             .collect::<Vec<_>>()

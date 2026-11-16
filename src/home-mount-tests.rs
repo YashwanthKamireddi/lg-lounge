@@ -1732,3 +1732,44 @@ fn enable_registers_the_early_start_and_disable_removes_every_part() {
             .any(|entry| entry["file"] == "/var/lib/lounge/home-filter.js")
     );
 }
+
+#[test]
+fn a_cold_boot_opens_home_first_and_disable_gives_the_input_back() {
+    let home = tv(Options {
+        normal_running: true,
+        ..Options::default()
+    });
+    let input = r#"{"type":"HDMI_2","appId":"com.webos.app.hdmi2","physicalLastSourceId":"HDMI_2","physicalLastSourceAppId":"com.webos.app.hdmi2"}"#;
+    home.state()
+        .files
+        .insert("/var/lib/eim/lastinput".into(), input.into());
+    let first = |home: &Home<Fake>| -> Value {
+        serde_json::from_str(&home.state().files["/var/lib/eim/lastinput"]).unwrap()
+    };
+    home.run("enable").unwrap();
+    let record = first(&home);
+    assert_eq!(record["physicalLastSourceAppId"], "com.webos.app.home");
+    // eim's own record of the input stays as it was.
+    assert_eq!(record["appId"], "com.webos.app.hdmi2");
+    assert_eq!(record["physicalLastSourceId"], "HDMI_2");
+    // An input watched since puts its name back; powering off points the boot at Home again.
+    home.state()
+        .files
+        .insert("/var/lib/eim/lastinput".into(), input.into());
+    home.run("standby").unwrap();
+    assert_eq!(
+        first(&home)["physicalLastSourceAppId"],
+        "com.webos.app.home"
+    );
+    home.run("disable").unwrap();
+    assert_eq!(
+        first(&home)["physicalLastSourceAppId"],
+        "com.webos.app.hdmi2"
+    );
+    // Off, standby leaves the input alone.
+    home.run("standby").unwrap();
+    assert_eq!(
+        first(&home)["physicalLastSourceAppId"],
+        "com.webos.app.hdmi2"
+    );
+}

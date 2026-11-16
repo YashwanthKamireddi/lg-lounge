@@ -88,6 +88,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'licenses/sdl2.txt',
     'licenses/lucide.txt',
     'assets/font-metrics.json',
+    'assets/font-clock.ttf',
     'assets/font-license.txt',
     'assets/version.txt',
     ...[350, 400, 450, 500, 550, 600, 650, 800].flatMap((weight) => [
