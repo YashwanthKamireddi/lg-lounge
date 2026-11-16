@@ -331,7 +331,7 @@ pub fn request_home(preload: &mut Preload, state: &State, assets: &Assets) {
         }
     }
     for id in &order {
-        for path in card_pictures(assets, state.preferences.appearance, id) {
+        for path in card_pictures(assets, id) {
             preload.request(path);
         }
     }
@@ -388,22 +388,17 @@ pub fn wallpaper_pictures(assets: &Assets, id: &str) -> [String; 3] {
     [".jpg", "-glass.png", "-home-glass.png"].map(|suffix| assets.wallpaper(id, suffix))
 }
 
-/// A bundled card's pictures the appearance can show: its dark version in Dark, the light one
-/// in Light, both in Automatic (which crossfades between them). Cards without a dark version
-/// always use the light one.
-fn card_pictures(assets: &Assets, appearance: crate::model::Appearance, id: &str) -> Vec<String> {
-    use crate::model::Appearance;
+/// A bundled card's pictures: its light one, and its dark version where it has one (LG's system
+/// cards). Both, whatever the appearance: switching it crossfades between them, and a version
+/// decoded only then flickered in late.
+fn card_pictures(assets: &Assets, id: &str) -> Vec<String> {
     if !assets.tiles.contains_key(id) {
         return vec![];
     }
     let dark = format!("{id}.dark");
-    let has_dark = assets.tiles.contains_key(&dark);
-    let mut paths = Vec::with_capacity(2);
-    if has_dark && appearance != Appearance::Light {
+    let mut paths = vec![assets.path(format!("tiles/{id}.png"))];
+    if assets.tiles.contains_key(&dark) {
         paths.push(assets.path(format!("tiles/{dark}.png")));
-    }
-    if !has_dark || appearance != Appearance::Dark {
-        paths.push(assets.path(format!("tiles/{id}.png")));
     }
     paths
 }
@@ -434,7 +429,7 @@ pub fn refill(
     }
     for app in &state.inventory.apps {
         let paths = if assets.tiles.contains_key(&app.id) {
-            card_pictures(assets, state.preferences.appearance, &app.id)
+            card_pictures(assets, &app.id)
         } else if app.brand != "generic" {
             vec![assets.path(format!("surfaces/{}.png", app.brand))]
         } else {
