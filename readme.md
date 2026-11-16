@@ -11,7 +11,7 @@
 [![LG webOS 5, 6, 22 to 26](https://img.shields.io/badge/LG%20webOS-5%20%C2%B7%206%20%C2%B7%2022%E2%80%9326-a50034?logo=lg&logoColor=white)](#compatibility)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3b4590)](license)
 
-<img src="docs/readme/demo.webp" alt="Lounge in motion: the glass dock, the app grid and the Inputs panel on an LG TV" width="100%">
+<img src="docs/readme/demo.webp" alt="Lounge in motion: moving along the dock, the Inputs panel, and the app grid" width="100%">
 
 [Install](#install) · [Screens](#screens) · [How it works](#how-it-works) · [Build](#build)
 
@@ -45,7 +45,7 @@ Other TVs will measure differently; `tools/tv-bench.sh` measures your own.
   </tr>
   <tr>
     <td width="50%"><img src="docs/readme/menu.jpg" alt="Holding OK on an app shows Move, Hide and Uninstall under it"></td>
-    <td width="50%"><img src="docs/readme/light-settings.jpg" alt="Settings › General in the Light appearance"></td>
+    <td width="50%"><img src="docs/readme/light-settings.jpg" alt="Settings › Home Screen in the Light appearance"></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/readme/grid.jpg" alt="Every app in a grid under the dock"></td>
