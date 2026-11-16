@@ -579,19 +579,20 @@ pub(super) fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &st
     // app's icon and its words, no close button (it leaves on its own, and
     // a click anywhere on it dismisses). It slides in from the screen edge.
     let start = out.draw.len();
-    let style = text(24., 500, 0.).leading(31. / 24.);
-    let icon = 52.;
+    // Small and quiet, as tvOS's banners: one line of body text beside the app's icon.
+    let style = text(21., 500, 0.).leading(27. / 21.);
+    let icon = 34.;
     // One line when it fits; otherwise two balanced lines, never a lone
     // word left hanging on the last.
     let natural = assets.width(notice, style) + 4.;
-    let text_width = if natural <= 760. {
-        natural.max(200.)
+    let text_width = if natural <= 640. {
+        natural
     } else {
-        (natural / 2. + 60.).min(760.)
+        (natural / 2. + 50.).min(640.)
     };
     let lines = assets.lines(notice, style, text_width) as f32;
-    let width = 22. + icon + 18. + text_width + 30.;
-    let height = (lines * 31. + 40.).max(icon + 32.);
+    let width = 14. + icon + 14. + text_width + 24.;
+    let height = (lines * 27. + 26.).max(icon + 22.);
     // Top right, right-aligned with the status pill and just beneath it, so
     // the time is never covered; where no pill shows it takes the top.
     let rect = Rect::new(
@@ -609,16 +610,16 @@ pub(super) fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &st
     out.glass_over(home_backdrop(state, assets), rect, radius, c(PLATTER, 0.34));
     out.draw.push(Draw::Soft(None));
     out.rim(rect, radius, 0.55, if focused { 0.3 } else { 0.06 });
-    let badge = Rect::new(rect.x + 22., rect.y + (height - icon) / 2., icon, icon);
-    out.shape(badge, 13., c(0x25272d, 1.));
-    out.image(assets.path("app-icon.png"), badge, 13., false);
+    let badge = Rect::new(rect.x + 14., rect.y + (height - icon) / 2., icon, icon);
+    out.shape(badge, 9., c(0x25272d, 1.));
+    out.image(assets.path("app-icon.png"), badge, 9., false);
     out.text(
         notice,
         Rect::new(
-            badge.x + icon + 18.,
-            rect.y + (height - lines * 31.) / 2.,
+            badge.x + icon + 14.,
+            rect.y + (height - lines * 27.) / 2.,
             text_width,
-            lines * 31.,
+            lines * 27.,
         ),
         style,
         WHITE,

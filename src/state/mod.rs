@@ -79,6 +79,8 @@ pub const WALLPAPER_FADE: f32 = 0.4;
 pub const SWITCHER_CLOSE_MS: u64 = 320;
 /// How long a banner stays up (its last 0.25 s fade it out).
 pub const NOTICE_SECONDS: f32 = 5.;
+/// How long a notice takes to arrive.
+pub const NOTICE_ARRIVE_MS: u64 = 340;
 /// Search and the context menu fade out over this long when closed.
 pub const FADE_OUT_MS: u64 = 160;
 /// After a close, the windows to its right slide into the gap over this long.
@@ -612,7 +614,16 @@ impl State {
     }
 
     pub fn notify(&mut self, text: impl Into<String>) {
-        self.notice = Some((text.into(), crate::clock::now()));
+        let now = crate::clock::now();
+        // A notice already on screen changes its words in place and stays its full time, with
+        // no second slide-in (pressing on, each new one dropped in again and read as jumpy).
+        let start = match &self.notice {
+            Some((_, start)) if crate::clock::since(start).as_secs_f32() < NOTICE_SECONDS => now
+                .checked_sub(Duration::from_millis(NOTICE_ARRIVE_MS))
+                .unwrap_or(now),
+            _ => now,
+        };
+        self.notice = Some((text.into(), start));
         self.dirty = true;
     }
 
