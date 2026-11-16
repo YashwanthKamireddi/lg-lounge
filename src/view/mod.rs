@@ -26,7 +26,7 @@ use crate::{
 };
 use glass::{shelf_art, shelf_dissolve};
 use home::{home, library};
-use overlays::{footer, header, inputs_panel, keyboard, options, toast};
+use overlays::{footer, header, inputs_panel, options, toast};
 use settings::settings;
 use shared::{c, detail_style};
 use std::{
@@ -302,12 +302,7 @@ fn cross(out: &mut Scene, from: Backdrop, to: Backdrop, t: f32) {
 
 pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     let mut out = Scene::new(theme::Theme::new(state.light()));
-    // Search, once fully in, is an opaque page: nothing beneath it shows.
-    let search_covers =
-        matches!(state.overlay, Some(Overlay::Keyboard)) && state.panel_started.is_none();
-    if search_covers {
-        // No background: the search page covers it.
-    } else if state.switcher_covers() {
+    if state.switcher_covers() {
         // The switcher's dimmed backdrop is then the whole background: one
         // opaque pass instead of a picture with a full-screen glass over it.
         let shade = [SWITCHER_VEIL, SWITCHER_VEIL, SWITCHER_VEIL + 0.02, 1.];
@@ -389,7 +384,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     ))));
     // Fully covering screens (search, the switcher once shown) skip the page
     // beneath: drawing it would only spend the TV's small GPU budget.
-    let covered = search_covers || state.switcher_covers();
+    let covered = state.switcher_covers();
     if covered {
         out.draw.push(Draw::EdgeFade(None));
         out.draw.push(Draw::Clip(None));
@@ -457,25 +452,6 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         }
         out.page = Some((state.page, page_start..out.draw.len()));
     }
-    // Closing: search fades off the home instead of cutting, its query and
-    // results with it (they vanished on the first frame, leaving an empty
-    // page to fade).
-    if state.overlay.is_none()
-        && let Some(closed) = state.search_closed
-    {
-        let t = (crate::clock::since(closed).as_secs_f32() * 1000. / FADE_OUT_MS as f32).min(1.);
-        let alpha = 1. - t * (2. - t);
-        match &state.search_ghost {
-            Some(ghost) => out.ghost(ghost, 0., alpha),
-            // The search page's own colour, so closing it never flashes
-            // dark in the light appearance.
-            None => out.shape(
-                Rect::new(0., 0., 1920., 1080.),
-                0.,
-                out.theme.pick(c(0x2b2b2d, alpha), c(0xf2f2f7, alpha)),
-            ),
-        }
-    }
     // Closing: the context menu shrinks back into its tile as it fades, the
     // reverse of how it rose. It eases out, as the opening does: an ease-in
     // ended at full speed and the menu stopped dead on its last frame.
@@ -527,7 +503,6 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     }
     if let Some(
         overlay @ (Overlay::Options { .. }
-        | Overlay::Keyboard
         | Overlay::Uninstall { .. }
         | Overlay::OfferHome { .. }
         | Overlay::Phone { .. }
@@ -559,16 +534,10 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             1. - (1. - t).powi(3)
         });
         let eased = opening.unwrap_or(1.);
-        if !search_covers {
-            out.dim(1. - MENU_DIM * eased);
-        }
+        out.dim(1. - MENU_DIM * eased);
         let panel = out.draw.len();
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
-            Overlay::Keyboard => {
-                keyboard(&mut out, state, assets);
-                out.search = Some(panel..out.draw.len());
-            }
             Overlay::Uninstall { id, .. } => alert::uninstall(&mut out, state, assets, id),
             Overlay::OfferHome { .. } => alert::offer_home(&mut out, state, assets),
             Overlay::Phone { .. } => alert::phone(&mut out, state, assets),

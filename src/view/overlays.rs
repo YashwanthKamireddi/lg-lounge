@@ -3,13 +3,12 @@
 use super::{
     Assets, Scene,
     glass::home_backdrop,
-    shared::{PLATTER, c, detail_style, row_style, text},
-    tile::tile,
+    shared::{PLATTER, c, detail_style, text},
 };
 use crate::{
     i18n,
     renderer::{Draw, WHITE},
-    state::{GRID_SCROLL, KEYS, Page, Rect, SEARCH_TILE, State, Target, TextField},
+    state::{GRID_SCROLL, Page, Rect, State, Target},
     weather,
 };
 use time::OffsetDateTime;
@@ -169,59 +168,29 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     out.fade(first, fade, 1.);
 }
 
-/// The bar's buttons: Search at the top left and Inputs beside the time pill, glass capsules
-/// that always say what they are (an icon alone was missed by the people who most need it).
-/// Up from the dock focuses the one above that half of the screen; OK opens it.
+/// The Inputs button beside the time pill: a round glass button with the input glyph. Up from
+/// the dock focuses it; OK opens the Inputs panel.
 fn bar_buttons(out: &mut Scene, state: &State, assets: &Assets, inputs_right: f32) {
     // A focused button is always fully there, even while the grid glides back to the top.
-    let focused = matches!(state.focus, Target::SearchButton | Target::InputsButton);
+    let focused = state.focus == Target::InputsButton;
     let shown = if focused { 1. } else { pill_shown(state) };
-    if state.page != Page::Apps || shown <= 0. {
+    if state.page != Page::Apps || shown <= 0. || state.input_choices().is_empty() {
         return;
     }
     let first = out.draw.len();
-    bar_button(
-        out,
-        state,
-        assets,
-        Target::SearchButton,
-        "search",
-        i18n::t("search"),
-        |_| 84.,
-    );
-    if !state.input_choices().is_empty() {
-        bar_button(
-            out,
-            state,
-            assets,
-            Target::InputsButton,
-            "input-hdmi-bold",
-            i18n::t("inputs"),
-            |width| inputs_right - width,
-        );
-    }
+    inputs_button(out, state, assets, inputs_right - PILL_HEIGHT);
     out.fade(first, shown, 1.);
     if shown <= 0.5 {
-        out.controls.retain(|control| {
-            !matches!(control.target, Target::SearchButton | Target::InputsButton)
-        });
+        out.controls
+            .retain(|control| control.target != Target::InputsButton);
     }
 }
 
-fn bar_button(
-    out: &mut Scene,
-    state: &State,
-    assets: &Assets,
-    target: Target,
-    icon_name: &str,
-    label: &str,
-    x: impl Fn(f32) -> f32,
-) {
+fn inputs_button(out: &mut Scene, state: &State, assets: &Assets, x: f32) {
+    let target = Target::InputsButton;
     let k = PILL_SCALE;
-    let style = text(25. * k, 600, 0.);
-    let icon = 30. * k;
-    let width = 20. * k + icon + 10. * k + assets.width(label, style) + 24. * k;
-    let base = Rect::new(x(width), 49., width, PILL_HEIGHT);
+    let icon = 32. * k;
+    let base = Rect::new(x, 49., PILL_HEIGHT, PILL_HEIGHT);
     // Lit while its panel is open, as a tile stays lifted under its menu.
     let focus = if target == Target::InputsButton
         && matches!(
@@ -254,21 +223,9 @@ fn bar_button(
     let line = |height: f32| rect.y + (rect.h - height) / 2.;
     out.icon(
         assets,
-        icon_name,
-        Rect::new(rect.x + 20. * k, line(icon), icon, icon),
+        "input-hdmi-bold",
+        Rect::new(rect.x + (rect.w - icon) / 2., line(icon), icon, icon),
         ink,
-    );
-    out.text(
-        label,
-        Rect::new(
-            rect.x + 20. * k + icon + 10. * k,
-            line(30. * k),
-            rect.w,
-            30. * k,
-        ),
-        style,
-        ink,
-        false,
     );
     out.control(target, base, false);
 }
@@ -594,169 +551,6 @@ pub(super) fn options(
     }
 }
 
-pub(super) fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
-    // Search: large query, a letter grid on the left, live results beside it.
-    let location = state.keyboard_field == TextField::Location;
-    let screen = Rect::new(0., 0., 1920., 1080.);
-    out.modal = Some(screen);
-    // #2b2b2d (Apple's light grey in the light appearance), a 56pt glyph at (104,164) and the
-    // Bold 57 query from x187.
-    out.shape(screen, 0., out.theme.pick(c(0x2b2b2d, 1.), c(0xf2f2f7, 1.)));
-    out.icon(
-        assets,
-        "search",
-        Rect::new(104., 169., 46., 46.),
-        out.theme.ink(0.5),
-    );
-    let typed = state.editing_text();
-    let query_style = text(57., 650, 0.).leading(66. / 57.);
-    if typed.is_empty() {
-        let hint = if location {
-            i18n::t("cityPostcode")
-        } else {
-            i18n::t("search")
-        };
-        out.text(
-            hint,
-            Rect::new(187., 159., 1500., 66.),
-            query_style,
-            out.theme.ink(0.3),
-            false,
-        );
-    } else {
-        out.text(
-            typed,
-            Rect::new(187., 159., 1500., 66.),
-            query_style,
-            out.theme.ink(1.),
-            false,
-        );
-    }
-    let caret_x = 183.
-        + if typed.is_empty() {
-            0.
-        } else {
-            assets.width(typed, query_style) + 6.
-        };
-    out.shape(Rect::new(caret_x, 166., 4., 54.), 2., c(0x0a84ff, 1.));
-    // A 6×6 grid of a–z and 0–9 with Space, Delete, Clear and Done beneath, as the TV apps
-    // people already know (Netflix, YouTube): any letter is at most five presses away, where
-    // tvOS's single 40-key row took up to 39. Results sit to its right.
-    let (key_w, key_h, gap) = (96., 80., 8.);
-    let (left, top) = (84., 270.);
-    let key_rect = |index: usize| -> Rect {
-        if index < 36 {
-            let (row, column) = (index / 6, index % 6);
-            Rect::new(
-                left + column as f32 * (key_w + gap),
-                top + row as f32 * (key_h + gap),
-                key_w,
-                key_h,
-            )
-        } else {
-            // Space spans three keys; Delete, Clear and Done one each.
-            let column = [0., 3., 4., 5.][index - 36];
-            let span = if index == 36 { 3. } else { 1. };
-            Rect::new(
-                left + column * (key_w + gap),
-                top + 6. * (key_h + gap),
-                span * key_w + (span - 1.) * gap,
-                key_h,
-            )
-        }
-    };
-    for (index, key) in KEYS.iter().enumerate() {
-        let rect = key_rect(index);
-        let focused = state.focus == Target::Key(index);
-        if focused {
-            out.shadow(rect, 16., 20., 10., 0.4);
-            out.shape(rect, 16., WHITE);
-        } else {
-            out.shape(rect, 16., out.theme.wash(0.08));
-        }
-        let ink = if focused {
-            c(PLATTER, 1.)
-        } else {
-            out.theme.ink(0.78)
-        };
-        let icon = match *key {
-            "Space" => Some("space"),
-            "Delete" => Some("delete"),
-            "Clear" => Some("close"),
-            "Done" => Some("check"),
-            _ => None,
-        };
-        if let Some(icon) = icon {
-            out.icon(
-                assets,
-                icon,
-                Rect::new(
-                    rect.x + (rect.w - 32.) / 2.,
-                    rect.y + (rect.h - 32.) / 2.,
-                    32.,
-                    32.,
-                ),
-                ink,
-            );
-        } else {
-            out.text(
-                key.to_lowercase(),
-                Rect::new(rect.x, rect.y + (rect.h - 52.) / 2., rect.w, 52.),
-                text(40., if focused { 650 } else { 500 }, 0.).leading(1.3),
-                ink,
-                true,
-            );
-        }
-        out.control(Target::Key(index), rect, false);
-    }
-    if !location {
-        // Search never offers itself as a result.
-        let apps: Vec<_> = state
-            .apps()
-            .into_iter()
-            .filter(|app| app.id != SEARCH_TILE)
-            .collect();
-        let results_x = 760.;
-        if apps.is_empty() && !typed.is_empty() {
-            out.text(
-                i18n::format("noMatchesHint", &[("query", typed)]),
-                Rect::new(results_x, 280., 1840. - results_x, 32.),
-                row_style(),
-                out.theme.ink(0.5),
-                false,
-            );
-            return;
-        }
-        // "Top Results" beside the keys: three columns of lockups, three rows.
-        out.text(
-            i18n::t("topResults"),
-            Rect::new(results_x, 262., 1000., 38.),
-            text(31., 650, 0.),
-            out.theme.ink(0.55),
-            false,
-        );
-        let ink = out.theme.ink(1.);
-        for (index, app) in apps.iter().take(9).enumerate() {
-            let (row, column) = (index / 3, index % 3);
-            tile(
-                out,
-                state,
-                assets,
-                app,
-                Rect::new(
-                    results_x + column as f32 * 370.,
-                    326. + row as f32 * 250.,
-                    330.,
-                    186.,
-                ),
-                Some(ink),
-                false,
-            );
-        }
-    }
-}
-
-/// How far a notification is in (0..1), on its arrive and leave curves.
 fn notice_shown(state: &State) -> f32 {
     let Some((_, opened)) = &state.notice else {
         return 0.;

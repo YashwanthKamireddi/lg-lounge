@@ -37,18 +37,23 @@ try {
   const logos = (await fs.readdir(path.join(root, 'assets/logos')))
     .filter((file) => file.endsWith('.svg'))
     .map((file) => path.parse(file).name)
-    // Live TV is not a grid app (it leads the Inputs panel), so search never shows it.
+    // Live TV is not a grid app (it leads the Inputs panel).
     .filter((logo) => logo !== 'live-tv')
     .sort();
   const cards = [];
   for (const [index, logo] of logos.entries()) {
     const app = inventory.find((app) => app.brand === logo);
     assert.ok(app, `Desktop demo is missing ${logo}`);
+    // The app first in the dock, its card at a known place.
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ reduced_motion: true, show_weather: false, favorites: [app.id] }),
+    );
     run(binary, [
       '--preferences',
       preferences,
       '--script',
-      `apps,type:${app.title},back`,
+      'home,right,left',
       '--frames',
       '18',
       '--screenshot',
@@ -60,20 +65,20 @@ try {
     ]);
     const state = JSON.parse(await fs.readFile(dump, 'utf8'));
     const report = JSON.parse(await fs.readFile(diagnostics, 'utf8'));
-    assert.ok(state.apps.includes(app.id), `${logo} must be searchable in the demo`);
+    assert.equal(state.apps[0], app.id, `${logo} must lead the dock`);
     assert.equal(report.capture.missing_images, 0, `Missing artwork for ${logo}`);
     assert.equal(report.capture.glyph_failures, 0, `Invalid caption for ${logo}`);
     assert.ok(report.capture.vector_meshes > 0);
     const input = await sharp(screenshot)
-      .extract({ left: 78, top: 264, width: 282, height: 238 })
+      .extract({ left: 60, top: 760, width: 360, height: 236 })
       .png()
       .toBuffer();
-    cards.push({ input, left: (index % 6) * 282, top: Math.floor(index / 6) * 238 });
+    cards.push({ input, left: (index % 6) * 360, top: Math.floor(index / 6) * 236 });
   }
   await sharp({
     create: {
-      width: 6 * 282,
-      height: Math.ceil(cards.length / 6) * 238,
+      width: 6 * 360,
+      height: Math.ceil(cards.length / 6) * 236,
       channels: 4,
       background: '#11151b',
     },

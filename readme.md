@@ -20,8 +20,8 @@
 ## Overview
 
 Lounge replaces LG's Home with a single native binary that draws with OpenGL ES 2.0. It shows a
-dock of five apps over a wallpaper, every other app in a grid below, and a bar with Search and the
-TV's inputs. It runs as the TV's real Home: the Home button opens it, and it resumes instead of
+dock of five apps over a wallpaper, every other app in a grid below, and an Inputs button for the
+TV's sources. It runs as the TV's real Home: the Home button opens it, and it resumes instead of
 restarting.
 
 Measured on the test TV (LG 65UQ801C0SB, webOS 22, Mali-G52):
@@ -40,7 +40,7 @@ Other TVs will measure differently; `tools/tv-bench.sh` measures your own.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/readme/apps.jpg" alt="Home with the Inputs panel open under the Search and Inputs buttons"></td>
+    <td width="50%"><img src="docs/readme/apps.jpg" alt="Home with the Inputs panel open under its button"></td>
     <td width="50%"><img src="docs/readme/switcher.jpg" alt="The app switcher: open apps as large cards"></td>
   </tr>
   <tr>
@@ -49,11 +49,7 @@ Other TVs will measure differently; `tools/tv-bench.sh` measures your own.
   </tr>
   <tr>
     <td width="50%"><img src="docs/readme/grid.jpg" alt="Every app in a grid under the dock"></td>
-    <td width="50%"><img src="docs/readme/search.jpg" alt="Search: a letter grid with results as you type"></td>
-  </tr>
-  <tr>
     <td width="50%"><img src="docs/readme/qr.jpg" alt="Settings › Background › From your phone: a QR code to scan with the phone"></td>
-    <td width="50%"><img src="docs/readme/from-phone.jpg" alt="The phone's page sending a photo, and the photo as the TV's wallpaper behind the dock"></td>
   </tr>
 </table>
 
@@ -61,7 +57,6 @@ Other TVs will measure differently; `tools/tv-bench.sh` measures your own.
 - **Inputs one press up:** Live TV and every HDMI port, plugged-in ones first, under LG's names.
 - **Hold OK on an app** to move, hide or uninstall it.
 - **An app switcher** for what's open: OK opens, Up closes, Back returns.
-- **Search** from a letter grid, with results as you type.
 - **Your own wallpaper and profile picture,** sent from your phone with a QR code.
 - **Light, Dark or Automatic,** plus a focus outline, larger names and reduced motion.
 

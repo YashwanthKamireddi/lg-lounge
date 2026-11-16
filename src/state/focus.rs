@@ -224,10 +224,7 @@ impl State {
                     self.home_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
                 }
             }
-            if matches!(
-                self.focus,
-                Target::Nav(_) | Target::Search | Target::Sidebar(_)
-            ) {
+            if matches!(self.focus, Target::Nav(_) | Target::Sidebar(_)) {
                 self.scroll = 0.;
             } else if control.scrollable {
                 let top = if self.page == Page::Apps {

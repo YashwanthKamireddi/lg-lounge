@@ -130,14 +130,6 @@ fn compose(
             .page_since
             .map(|_| previous.draw[range.clone()].to_vec());
     }
-    // Search closing fades out exactly what it showed last.
-    if let Some(previous) = previous
-        && let Some(range) = &previous.search
-        && state.search_closed.is_some()
-        && !matches!(state.overlay, Some(Overlay::Keyboard))
-    {
-        state.search_ghost = Some(previous.draw[range.clone()].to_vec());
-    }
     // A new Settings level pushes from this very frame, out of exactly what
     // the last frame showed.
     if state.track_settings_level()
@@ -1641,7 +1633,7 @@ impl Shell {
             return Err("Frame budget ended before the input script completed".into());
         }
         if let Some(path) = self.options.dump {
-            let dump = serde_json::json!({ "page": self.state.page, "focus": self.state.focus, "query": self.state.query,
+            let dump = serde_json::json!({ "page": self.state.page, "focus": self.state.focus,
                 "preferences": self.state.preferences, "apps": self.state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
                 "error": self.state.error, "scroll": self.state.scroll, "home_scroll": self.state.home_scroll, "subpage": self.state.subpage, "modal": self.state.overlay.is_some(), "weather": self.state.weather,
                 "inventory": self.state.inventory.apps,

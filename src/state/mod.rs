@@ -70,7 +70,6 @@ pub const ROW_PITCH: f32 = 304.;
 pub const GRID_LEFT: f32 = 90.;
 pub const GRID_STEP: f32 = 354.;
 pub const SETTINGS_TILE: &str = "lounge.settings";
-pub const SEARCH_TILE: &str = "lounge.search";
 pub const HOME_DASHBOARD: &str = "com.webos.app.homeconnect";
 pub const PAGE_MS: f32 = 280.;
 /// The scroll glide's spring (rad/s): half way in ~85 ms, settled in ~0.5 s.
@@ -114,7 +113,6 @@ pub enum Target {
     App(String),
     Input(String),
     Browse,
-    Search,
     Sidebar(usize),
     Setting(usize),
     Background(usize),
@@ -122,7 +120,6 @@ pub enum Target {
     Retry,
     DismissNotice,
     Option(usize),
-    Key(usize),
     WeatherConfigure,
     WeatherToggle,
     WeatherLocation,
@@ -133,10 +130,8 @@ pub enum Target {
     WeatherResult(usize),
     /// An alert's buttons, top to bottom (the action, then Cancel).
     Alert(usize),
-    /// The labelled Inputs button beside the time pill (Up from the dock's right half).
+    /// The Inputs button beside the time pill (Up from the dock).
     InputsButton,
-    /// The labelled Search button at the top left (Up from the dock's left half).
-    SearchButton,
     /// A source in the Inputs panel: Live TV or an input, by app id.
     InputPick(String),
     /// A name in the Inputs panel's name list: 0 is the port's own name, then INPUT_NAMES.
@@ -178,7 +173,7 @@ pub enum Overlay {
         id: String,
         restore: Target,
     },
-    Keyboard,
+    /// The TV's own keyboard, typing a place name for the weather.
     SystemKeyboard,
     /// tvOS's alert before removing an app: Uninstall over Cancel, Cancel
     /// focused. Back is Cancel.
@@ -209,12 +204,6 @@ pub enum Subpage {
     Hidden,
     Avatar,
     Appearance,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-pub enum TextField {
-    Apps,
-    Location,
 }
 
 #[derive(Clone, Copy)]
@@ -271,12 +260,6 @@ pub enum PhoneStep {
     Failed(&'static str),
 }
 
-pub const KEYS: [&str; 40] = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
-    "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Space",
-    "Delete", "Clear", "Done",
-];
-
 pub struct State {
     pub page: Page,
     pub focus: Target,
@@ -326,7 +309,6 @@ pub struct State {
     light_shown: Option<bool>,
     appearance_from: Option<(f32, Instant)>,
     pub preferences: Preferences,
-    pub query: String,
     pub section: usize,
     pub subpage: Option<Subpage>,
     pub scroll: f32,
@@ -366,7 +348,6 @@ pub struct State {
     pub fading_to: Option<String>,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
-    pub keyboard_field: TextField,
     /// Outgoing focus target, when it started shrinking, and how focused it was then.
     pub focus_from: Option<(Target, Instant, f32)>,
     focus_since: Option<Instant>,
@@ -414,10 +395,6 @@ pub struct State {
     pub bar_return: Option<Target>,
     /// When Back closed the Inputs panel: it shrinks back into its button meanwhile.
     pub inputs_closed: Option<Instant>,
-    /// Search just closed: its page fades off the home.
-    pub search_closed: Option<Instant>,
-    /// That page as it was last drawn, fading out.
-    pub search_ghost: Option<Vec<crate::renderer::Draw>>,
     /// Full-screen Top Shelf: Up from the dock lowers it off screen.
     pub expanded: bool,
     /// When Top Shelf mode last began; its chevron bobs for a moment.
@@ -532,7 +509,6 @@ impl State {
             light_shown: None,
             appearance_from: None,
             preferences,
-            query: String::new(),
             section: 0,
             subpage: None,
             scroll: 0.,
@@ -556,7 +532,6 @@ impl State {
             fading_to: None,
             panel_started: None,
             weather: weather::Weather::default(),
-            keyboard_field: TextField::Apps,
             focus_from: None,
             focus_since: None,
             last_focus: Target::Nav(0),
@@ -580,8 +555,6 @@ impl State {
             options_closed: None,
             bar_return: None,
             inputs_closed: None,
-            search_closed: None,
-            search_ghost: None,
             expanded: false,
             shelf_since: Some(crate::clock::now()),
             shelf_app: None,
@@ -716,14 +689,6 @@ impl State {
             self.settings_ghost = None;
             self.dirty = true;
         }
-        if self
-            .search_closed
-            .is_some_and(|start| crate::clock::since(start) >= Duration::from_millis(FADE_OUT_MS))
-        {
-            self.search_closed = None;
-            self.search_ghost = None;
-            self.dirty = true;
-        }
         if self.options_closed.as_ref().is_some_and(|(_, start)| {
             crate::clock::since(start) >= Duration::from_millis(FADE_OUT_MS)
         }) {
@@ -835,7 +800,6 @@ impl State {
             // Keep ticking until a paused-typing search has been sent.
             || self.weather.search_pending()
             || self.options_closed.is_some()
-            || self.search_closed.is_some()
             // The chevron only exists with Top Shelf art; never redraw for it otherwise.
             || (!self.preferences.reduced_motion
                 && self.preferences.top_shelf_art
@@ -906,7 +870,6 @@ impl State {
         if self.page == Page::Home {
             self.scroll_favorites(0.);
         }
-        self.query.clear();
         self.overlay = None;
         self.moving = None;
         self.subpage = None;
@@ -926,16 +889,6 @@ impl State {
                 .filter_map(|id| self.inventory.apps.iter().find(|app| &app.id == id))
                 .collect();
         }
-        // The query narrows results only on the search screen; Home always
-        // shows every app (the last search is kept for next time, as on tvOS).
-        let query = if matches!(
-            self.overlay,
-            Some(Overlay::Keyboard | Overlay::SystemKeyboard)
-        ) {
-            self.query.to_lowercase()
-        } else {
-            String::new()
-        };
         let mut apps: Vec<_> = self
             .inventory
             .apps
@@ -944,29 +897,26 @@ impl State {
             // under the Inputs button.
             .filter(|app| app.id != HOME_DASHBOARD && app.id != crate::model::LIVE_TV)
             .filter(|app| {
-                !self.preferences.hidden.contains(&app.id)
-                    && !self.uninstalling.contains(&app.id)
-                    && app.title.to_lowercase().contains(&query)
+                !self.preferences.hidden.contains(&app.id) && !self.uninstalling.contains(&app.id)
             })
             .collect();
-        // Dock favourites first, then Settings, Search and inputs, then A-Z.
+        // Dock favourites first, then Settings and inputs, then A-Z.
         let rank = |app: &App| {
             ids.iter()
                 .position(|id| id == &app.id)
                 .unwrap_or(match app.brand.as_str() {
-                    "lounge-settings" => usize::MAX - 3,
-                    "lounge-search" => usize::MAX - 2,
+                    "lounge-settings" => usize::MAX - 2,
                     "lounge-input" => usize::MAX - 1,
                     _ => usize::MAX,
                 })
         };
-        // An input the owner has not placed follows Search, so a newly
+        // An input the owner has not placed follows Settings, so a newly
         // plugged-in device appears in one known place, never at the end of
         // the grid. One that has a place in the saved order (moved there, or
         // shown there when Move began) keeps it like any other app.
-        let search = apps
+        let after_settings = apps
             .iter()
-            .find(|app| app.id == SEARCH_TILE)
+            .find(|app| app.id == SETTINGS_TILE)
             .map_or(usize::MAX - 2, |app| rank(app));
         let place = |app: &App| {
             if app.brand == "lounge-input" && !ids.contains(&app.id) {
@@ -975,7 +925,7 @@ impl State {
                 if self.moving.is_some() {
                     (usize::MAX, 1)
                 } else {
-                    (search, 1)
+                    (after_settings, 1)
                 }
             } else {
                 (rank(app), 0)

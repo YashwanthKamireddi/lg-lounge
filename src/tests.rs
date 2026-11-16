@@ -1,7 +1,7 @@
 use crate::{
     model::{App, Input, InputMode, Preferences, demo_inventory},
     platform::{normalize_apps, normalize_inputs},
-    state::{Direction, Effect, Overlay, Page, State, Target, TextField},
+    state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
 };
 use serde_json::json;
@@ -58,9 +58,9 @@ fn ui_text(state: &State) -> Vec<String> {
 fn remote_routes_through_the_tvos_home_and_settings() {
     let mut state = ready();
     assert_eq!(state.focus, Target::App("netflix".into()));
-    let bar = |state: &State| matches!(state.focus, Target::SearchButton | Target::InputsButton);
-    // Up from a dock app without Top Shelf art reaches the bar above it (Search or Inputs);
-    // Down comes back to the app.
+    let bar = |state: &State| state.focus == Target::InputsButton;
+    // Up from a dock app without Top Shelf art reaches the Inputs button; Down comes back to
+    // the app.
     state.direction(Direction::Up, &controls(&state));
     assert!(bar(&state));
     state.direction(Direction::Down, &controls(&state));
@@ -137,31 +137,6 @@ fn reorder_persists_order_and_keeps_selected_identity() {
         state.unsaved_order,
         "saving falls to the main loop once Move ends"
     );
-}
-
-#[test]
-fn search_is_modal_filters_live_and_leaves_home_unfiltered() {
-    let mut state = ready();
-    state.open(1);
-    state.focus = Target::SearchButton;
-    state.activate();
-    assert!(
-        controls(&state)
-            .iter()
-            // Keys plus live result cards; Back dismisses, as on tvOS.
-            .all(|c| matches!(c.target, Target::Key(_) | Target::App(_)))
-    );
-    state.text("netflix");
-    state.delete();
-    state.text("x");
-    assert_eq!(state.apps().len(), 1);
-    state.back();
-    // The last search is kept for next time; Home shows every app again and
-    // focus returns to the Search button.
-    assert_eq!(state.query, "netflix");
-    assert_eq!(state.focus, Target::SearchButton);
-    assert!(state.apps().len() > 1);
-    assert_eq!(state.page, Page::Apps);
 }
 
 #[test]
@@ -977,9 +952,6 @@ fn recent_key_opens_the_switcher_only_from_the_bare_home() {
     let mut state = ready();
     state.open(1);
     assert_eq!(state.recent(), vec![Effect::Running]);
-    state.open_keyboard(TextField::Apps);
-    assert!(state.recent().is_empty());
-    state.back();
     state.open(2);
     assert!(state.recent().is_empty());
 }
@@ -1336,7 +1308,7 @@ fn settings_opens_on_general_and_right_enters_general() {
 
 #[test]
 fn number_keys_follow_the_grid_and_never_open_lounge_tiles() {
-    use crate::state::{SEARCH_TILE, SETTINGS_TILE};
+    use crate::state::SETTINGS_TILE;
     let mut state = ready();
     let first = order(&state)[0].clone();
     state.focus = Target::App(first);
@@ -1345,7 +1317,7 @@ fn number_keys_follow_the_grid_and_never_open_lounge_tiles() {
     state.activate();
     let launchable: Vec<String> = order(&state)
         .into_iter()
-        .filter(|id| id != SETTINGS_TILE && id != SEARCH_TILE)
+        .filter(|id| id != SETTINGS_TILE)
         .collect();
     for (slot, id) in launchable.iter().take(9).enumerate() {
         assert_eq!(state.quick_launch(slot), vec![Effect::Launch(id.clone())]);
@@ -1678,7 +1650,6 @@ fn only_apps_the_owner_installed_can_be_uninstalled() {
         "com.lge.app.foo",
         "com.palm.app.settings",
         crate::state::SETTINGS_TILE,
-        crate::state::SEARCH_TILE,
         "invalid';reboot",
         "",
     ] {
@@ -1838,7 +1809,6 @@ fn uninstall_is_offered_last_and_only_where_webos_allows_it() {
         "com.webos.app.livetv",
         "org.webosbrew.hbchannel",
         "com.webos.app.hdmi1",
-        crate::state::SEARCH_TILE,
         crate::state::SETTINGS_TILE,
     ] {
         state.back();
@@ -2057,14 +2027,12 @@ fn a_late_answer_to_back_opens_no_switcher_over_what_came_after() {
 fn up_from_the_dock_reaches_inputs_and_ok_switches_to_one() {
     let mut state = ready();
     state.preferences.top_shelf_art = false;
-    // A dock app on the right half: Inputs is the button above it (Search is over the left).
+    // Up from any dock app reaches the Inputs button; Left and Right stay on it.
     let first = order(&state)[4].clone();
     state.focus = Target::App(first.clone());
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::InputsButton);
     state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::SearchButton);
-    state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::InputsButton);
     // Down goes back to the app Up came from.
     state.direction(Direction::Down, &controls(&state));

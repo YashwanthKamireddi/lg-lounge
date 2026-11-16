@@ -53,7 +53,7 @@ impl State {
     pub fn quick_launch(&mut self, slot: usize) -> Vec<Effect> {
         self.apps()
             .into_iter()
-            .filter(|app| app.id != SETTINGS_TILE && app.id != SEARCH_TILE)
+            .filter(|app| app.id != SETTINGS_TILE)
             .nth(slot)
             .map_or_else(Vec::new, |app| vec![Effect::Launch(app.id.clone())])
     }

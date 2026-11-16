@@ -15,9 +15,6 @@ pub struct Scene {
     /// The page shown and its draws (all but the background and overlays),
     /// kept so the next page can cross-fade out of exactly what was on screen.
     pub page: Option<(crate::state::Page, std::ops::Range<usize>)>,
-    /// The search page's draws while it shows, kept so closing it fades out
-    /// exactly what was on screen.
-    pub search: Option<std::ops::Range<usize>>,
     /// This frame's appearance (Light, Dark, or between while it changes).
     pub(super) theme: super::theme::Theme,
     /// The draws of the tile a context menu acts on: dimming leaves them
@@ -33,7 +30,6 @@ impl Scene {
             modal: None,
             settings_range: None,
             page: None,
-            search: None,
             lit: None,
         }
     }

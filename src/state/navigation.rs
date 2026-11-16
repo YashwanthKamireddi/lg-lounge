@@ -178,21 +178,10 @@ impl State {
             }
             return vec![];
         }
-        if self.overlay.is_none()
-            && matches!(self.focus, Target::InputsButton | Target::SearchButton)
-        {
-            // Down goes back to the dock app Up came from; Left and Right cross the bar.
-            match direction {
-                Direction::Down => self.leave_bar(),
-                Direction::Left if self.focus == Target::InputsButton => {
-                    self.focus(Target::SearchButton, controls)
-                }
-                Direction::Right
-                    if self.focus == Target::SearchButton && !self.input_choices().is_empty() =>
-                {
-                    self.focus(Target::InputsButton, controls)
-                }
-                _ => {}
+        if self.overlay.is_none() && self.focus == Target::InputsButton {
+            // Down goes back to the dock app Up came from.
+            if matches!(direction, Direction::Down) {
+                self.leave_bar();
             }
             return vec![];
         }
@@ -397,18 +386,14 @@ impl State {
                         Direction::Up
                             if index < APPS_COLUMNS && (self.expanded || !self.has_art(id)) =>
                         {
-                            // The bar's button above the tile's half of the screen: Search over
-                            // the left, Inputs over the right.
-                            let x = controls
-                                .iter()
-                                .find(|control| control.target == self.focus)
-                                .map_or(0., |control| control.rect.center().0);
-                            self.bar_return = Some(self.focus.clone());
-                            Some(if x >= 960. && !self.input_choices().is_empty() {
-                                Target::InputsButton
+                            // The Inputs button, from any dock app; nothing to reach without
+                            // inputs.
+                            if self.input_choices().is_empty() {
+                                None
                             } else {
-                                Target::SearchButton
-                            })
+                                self.bar_return = Some(self.focus.clone());
+                                Some(Target::InputsButton)
+                            }
                         }
                         Direction::Up if index < APPS_COLUMNS => {
                             self.expanded = true;

@@ -34,15 +34,10 @@ pub(crate) fn script(
         "hold" => state.hold(),
         "wait" => vec![],
         action if action.starts_with("type:") => {
-            let field = if state.subpage == Some(state::Subpage::WeatherLocation) {
-                state::TextField::Location
-            } else {
-                state::TextField::Apps
-            };
             // Typing into an open keyboard continues it (one letter at a
             // time reads as typing); otherwise the keyboard opens first.
-            if !matches!(state.overlay, Some(state::Overlay::Keyboard)) {
-                state.open_keyboard(field);
+            if !state.text_input_active() {
+                state.open_keyboard();
             }
             state.text(&action[5..]);
             vec![]

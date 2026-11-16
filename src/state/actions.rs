@@ -86,11 +86,6 @@ impl State {
     }
 
     pub fn activate(&mut self) -> Vec<Effect> {
-        if matches!(self.overlay, Some(Overlay::Keyboard)) && matches!(self.focus, Target::App(_)) {
-            // A live search result was chosen: leave the keyboard and open it.
-            self.overlay = None;
-            self.panel_started = None;
-        }
         if let (Some(switcher), Target::Switch(index)) = (&self.switcher, &self.focus) {
             let id = switcher.apps.get(*index).cloned();
             let restore = switcher.restore.clone();
@@ -126,21 +121,14 @@ impl State {
                 }
                 return vec![];
             }
-            Target::SearchButton => {
-                self.open_keyboard(TextField::Apps);
-                return vec![];
-            }
             Target::App(id) | Target::Input(id) if !self.launch_busy() => {
                 return vec![Effect::Launch(id)];
-            }
-            Target::Search => {
-                self.open_keyboard(TextField::Apps);
             }
             Target::WeatherConfigure => {
                 self.open(2);
                 self.section = WEATHER_SECTION;
                 self.open_location();
-                self.open_keyboard(TextField::Location);
+                self.open_keyboard();
             }
             Target::WeatherToggle => {
                 self.preferences.show_weather = !self.preferences.show_weather;
@@ -157,7 +145,7 @@ impl State {
                     self.panel_started = Some(crate::clock::now());
                 }
             }
-            Target::WeatherQuery => self.open_keyboard(TextField::Location),
+            Target::WeatherQuery => self.open_keyboard(),
             Target::WeatherSearch => {
                 return self
                     .weather
@@ -475,24 +463,6 @@ impl State {
                 }
                 return vec![Effect::Save];
             }
-            Target::Key(index) => match KEYS[index] {
-                "Space" => self.text(" "),
-                "Delete" => self.delete(),
-                "Clear" => {
-                    if self.keyboard_field == TextField::Location {
-                        self.weather.edit(String::new());
-                    } else {
-                        self.query.clear();
-                    }
-                }
-                "Done" => {
-                    self.overlay = None;
-                    self.panel_started = None;
-                    self.focus = self.keyboard_return();
-                    self.search_closed = (!self.preferences.reduced_motion).then(crate::clock::now);
-                }
-                key => self.text(key),
-            },
             _ => {}
         }
         vec![]
@@ -600,16 +570,11 @@ impl State {
                     self.overlay = Some(Overlay::Inputs);
                     Target::InputPick(id)
                 }
-                Overlay::Keyboard | Overlay::SystemKeyboard => {
-                    self.search_closed = (!self.preferences.reduced_motion
-                        && matches!(overlay, Overlay::Keyboard))
-                    .then(crate::clock::now);
-                    self.keyboard_return()
-                }
+                Overlay::SystemKeyboard => Target::WeatherSearch,
             };
             return vec![];
         }
-        if matches!(self.focus, Target::InputsButton | Target::SearchButton) {
+        if matches!(self.focus, Target::InputsButton) {
             self.leave_bar();
             return vec![];
         }
@@ -635,12 +600,6 @@ impl State {
         }
         if self.page == Page::Settings {
             self.open(1);
-            return vec![];
-        }
-        if self.page == Page::Apps && self.focus == Target::Search {
-            self.query.clear();
-            self.focus = Target::SearchButton;
-            self.scroll = 0.;
             return vec![];
         }
         // Back on Home opens the app switcher, as on tvOS. Quit lives in Settings.
