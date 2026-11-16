@@ -165,23 +165,6 @@ impl Scene {
             }
         }
     }
-    /// tvOS Liquid Glass: the blurred wallpaper behind `rect` under a light
-    /// veil. Cheap: no runtime blur, a lens only along its rim.
-    pub(super) fn glass(
-        &mut self,
-        assets: &Assets,
-        background: &str,
-        rect: Rect,
-        radius: f32,
-        veil: Color,
-    ) {
-        self.glass_over(
-            assets.wallpaper(background, "-glass.png"),
-            rect,
-            radius,
-            veil,
-        );
-    }
     /// Glass over a specific pre-blurred backdrop (Top Shelf art, say): the
     /// backdrop through the glass's lens (glass.frag), in the appearance's
     /// light, under `veil`. Every glass piece is this one material.

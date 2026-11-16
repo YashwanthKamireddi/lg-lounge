@@ -1055,6 +1055,8 @@ impl Shell {
                 WindowEvent::Hidden | WindowEvent::Minimized => {
                     self.presence.hide();
                     self.state.launch_arrived();
+                    // Covered: the app is on screen, Home and Back no longer call it off.
+                    self.state.launch_pending = None;
                     save_order(&mut self.state, &self.writer);
                     self.leave_for_update();
                     release_memory(&mut self.renderer, &mut self.preload);

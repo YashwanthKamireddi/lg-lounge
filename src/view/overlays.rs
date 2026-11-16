@@ -601,17 +601,14 @@ pub(super) fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &st
         height,
     );
     let focused = state.focus == Target::DismissNotice;
-    out.shadow(rect, 32., 44., 12., 0.32);
+    // The same clear Liquid Glass as the pills and the dock (a capsule when it is one line),
+    // white ink in both appearances.
+    let radius = if lines <= 1. { height / 2. } else { 32. };
+    out.shadow(rect, radius, 44., 12., 0.3);
     out.draw.push(Draw::Soft(Some(SOFT_EDGE)));
-    out.glass(
-        assets,
-        state.wallpaper(),
-        rect,
-        32.,
-        out.theme.veil(0.6 - 0.12 * f32::from(u8::from(focused))),
-    );
+    out.glass_over(home_backdrop(state, assets), rect, radius, c(PLATTER, 0.34));
     out.draw.push(Draw::Soft(None));
-    out.rim(rect, 32., 0.5, if focused { 0.3 } else { 0.06 });
+    out.rim(rect, radius, 0.55, if focused { 0.3 } else { 0.06 });
     let badge = Rect::new(rect.x + 22., rect.y + (height - icon) / 2., icon, icon);
     out.shape(badge, 13., c(0x25272d, 1.));
     out.image(assets.path("app-icon.png"), badge, 13., false);
@@ -624,7 +621,7 @@ pub(super) fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &st
             lines * 31.,
         ),
         style,
-        out.theme.ink(1.),
+        WHITE,
         false,
     );
     if state.overlay.is_none() {

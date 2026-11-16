@@ -2321,3 +2321,20 @@ fn home_pressed_while_an_app_opens_calls_the_launch_off() {
     state.home_key(true);
     assert!(state.queued.is_empty());
 }
+
+#[test]
+fn back_while_an_app_opens_stays_on_home_and_calls_the_launch_off() {
+    let mut state = ready();
+    state.launching = true;
+    state.launch_pending = Some(("netflix".into(), crate::clock::now()));
+    // Lounge losing focus to the opening app does not end the chance to call it off.
+    state.launch_arrived();
+    assert!(state.back().is_empty(), "no app switcher");
+    assert!(state.queued.contains(&Effect::Close("netflix".into())));
+    // Once the app is really on screen, Back is the app's and Home just leaves it.
+    state.queued.clear();
+    state.launch_pending = Some(("youtube.leanback.v4".into(), crate::clock::now()));
+    state.app_reached_front("youtube.leanback.v4");
+    state.home_key(true);
+    assert!(state.queued.is_empty());
+}

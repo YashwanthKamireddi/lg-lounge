@@ -472,19 +472,27 @@ impl State {
     /// whatever is open closes and the home screen returns to its top. On the
     /// way back from an app the home stays as it was left, with anything that
     /// was still open closed.
-    pub fn home_key(&mut self, in_front: bool) {
-        // Home pressed while an app is still opening: the owner changed their mind. The launch
-        // is called off (the app is closed as it arrives), as Home always wins on the remote.
-        if let Some((id, at)) = self.launch_pending.take()
-            && crate::clock::since(at) < LAUNCH_CANCEL_WINDOW
-        {
-            self.launching = false;
-            self.launch_started = None;
-            self.launch_arrived();
-            self.launch_cancelled = Some((id.clone(), at));
-            self.queued.push(Effect::Close(id));
-            self.dirty = true;
+    /// Home or Back pressed while an app is still opening: the owner changed their mind. The
+    /// launch is called off (the app is closed, and closed again if it still arrives). True
+    /// when there was one to call off.
+    fn cancel_launch(&mut self) -> bool {
+        let Some((id, at)) = self.launch_pending.take() else {
+            return false;
+        };
+        if crate::clock::since(at) >= LAUNCH_CANCEL_WINDOW {
+            return false;
         }
+        self.launching = false;
+        self.launch_started = None;
+        self.launch_arrived();
+        self.launch_cancelled = Some((id.clone(), at));
+        self.queued.push(Effect::Close(id));
+        self.dirty = true;
+        true
+    }
+
+    pub fn home_key(&mut self, in_front: bool) {
+        self.cancel_launch();
         let open = self.page == Page::Settings
             || self.overlay.is_some()
             || self.switcher.is_some()
@@ -503,6 +511,14 @@ impl State {
 
     /// `front` reached the screen: an app whose launch Home called off is closed again.
     pub fn app_reached_front(&mut self, front: &str) -> Vec<Effect> {
+        // The app asked for is on screen: from now on Home and Back just leave it.
+        if self
+            .launch_pending
+            .as_ref()
+            .is_some_and(|(id, _)| id == front)
+        {
+            self.launch_pending = None;
+        }
         match self.launch_cancelled.take() {
             Some((id, at)) if crate::clock::since(at) < LAUNCH_CANCEL_WINDOW => {
                 if id == front {
@@ -534,6 +550,10 @@ impl State {
     pub fn back(&mut self) -> Vec<Effect> {
         self.pointer = false;
         self.dirty = true;
+        // Back while an app opens: stay on Home, as Home does.
+        if self.cancel_launch() {
+            return vec![];
+        }
         if let Some(switcher) = &mut self.switcher
             && switcher.dismissed.is_none()
         {
@@ -564,7 +584,14 @@ impl State {
                 | Overlay::Uninstall { restore, .. }
                 | Overlay::OfferHome { restore }
                 | Overlay::Phone { restore } => restore,
-                Overlay::Inputs => Target::InputsButton,
+                Overlay::Inputs => {
+                    // Already lit while its panel was open: it stays lit, with no dip and
+                    // relight (which read as a flicker).
+                    self.last_focus = Target::InputsButton;
+                    self.focus_since = None;
+                    self.focus_from = None;
+                    Target::InputsButton
+                }
                 Overlay::InputName(id) => {
                     // Back from the names returns to the input's row, the panel still open.
                     self.overlay = Some(Overlay::Inputs);

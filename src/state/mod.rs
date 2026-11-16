@@ -1166,7 +1166,6 @@ impl State {
 
     /// The app took the screen (or Lounge left it): nothing more to say about the launch.
     pub fn launch_arrived(&mut self) {
-        self.launch_pending = None;
         if self
             .launch_waiting
             .take()

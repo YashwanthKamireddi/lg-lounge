@@ -491,7 +491,6 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             .iter()
             .find(|control| control.target == Target::InputsButton)
             .map(|control| control.rect);
-        out.dim(1. - MENU_DIM * (1. - gone));
         let start = out.draw.len();
         let controls = out.controls.len();
         inputs_panel(&mut out, state, assets);
@@ -535,7 +534,11 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             1. - (1. - t).powi(3)
         });
         let eased = opening.unwrap_or(1.);
-        out.dim(1. - MENU_DIM * eased);
+        // The Inputs panel is a popover of the same glass as the pills, over the undimmed screen
+        // (dimmed, the glass read lighter than everything around it); menus and alerts dim.
+        if !matches!(overlay, Overlay::Inputs | Overlay::InputName(_)) {
+            out.dim(1. - MENU_DIM * eased);
+        }
         let panel = out.draw.len();
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
