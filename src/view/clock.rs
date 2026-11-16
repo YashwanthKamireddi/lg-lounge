@@ -31,21 +31,33 @@ pub(super) fn big_clock(out: &mut Scene, state: &State, assets: &Assets, now: Of
     }
 }
 
-/// "Monday 16 November".
-fn day_and_date(now: OffsetDateTime) -> String {
-    format!("{} {} {}", now.weekday(), now.day(), now.month())
+/// "Mon 16 Nov": the Lock Screen's short date over its figures.
+fn short_day_and_date(now: OffsetDateTime) -> String {
+    let short = |name: String| name.chars().take(3).collect::<String>();
+    format!(
+        "{} {} {}",
+        short(now.weekday().to_string()),
+        now.day(),
+        short(now.month().to_string())
+    )
 }
 
 /// Ink that stays readable on any wallpaper: white, over a soft dark copy just below it.
-fn lettering(out: &mut Scene, words: &str, rect: Rect, style: TextStyle, alpha: f32) {
+fn lettering(
+    out: &mut Scene,
+    words: &str,
+    rect: Rect,
+    style: TextStyle,
+    alpha: f32,
+    centered: bool,
+) {
     let drop = (style.size * 0.012).max(1.5);
     let shade = Rect::new(rect.x, rect.y + drop, rect.w, rect.h);
-    out.text(words, shade, style, c(0x000000, 0.2 * alpha), true);
-    out.text(words, rect, style, c(0xffffff, alpha), true);
+    out.text(words, shade, style, c(0x000000, 0.2 * alpha), centered);
+    out.text(words, rect, style, c(0xffffff, alpha), centered);
 }
 
 fn digital(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
-    let _ = assets;
     // As the Lock Screen: no AM/PM beside the large figures; the hour alone says enough.
     let hour = if state.hour_24 {
         format!("{:02}", now.hour())
@@ -56,70 +68,112 @@ fn digital(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
         }
     };
     let time = format!("{hour}:{:02}", now.minute());
-    // The Lock Screen's proportions: the date a line of semibold, the time in tall bold figures
-    // set tight, the two as one block.
     lettering(
         out,
-        &day_and_date(now),
-        Rect::new(CENTRE_X - 700., TOP - 40., 1400., 56.),
-        text(46., 600, 0.),
-        0.9,
-    );
-    lettering(
-        out,
-        &time,
-        Rect::new(CENTRE_X - 700., TOP - 6., 1400., 380.),
-        text(320., 650, -0.035),
+        &short_day_and_date(now),
+        Rect::new(CENTRE_X - 700., TOP - 34., 1400., 60.),
+        text(48., 650, 0.),
         0.94,
+        true,
     );
+    // The Lock Screen's figures: tall and narrow (the clock's own condensed cut), spaced so
+    // each stands clear, made of Liquid Glass: the picture behind them, lit and frosted.
+    let figures = text(460., 620, 0.025).clock();
+    out.draw.push(Draw::GlassText(
+        time,
+        Rect::new(CENTRE_X - 700., TOP - 28., 1400., 560.),
+        figures,
+        [1.4, 1.4, 1.44, 1.],
+        home_backdrop(state, assets),
+    ));
 }
 
 fn analog(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
-    let radius = 214.;
-    let centre = (CENTRE_X, TOP + radius - 18.);
+    // A watch's face in the screen's language: a near-square rounded rectangle (a squircle, as
+    // Apple Watch's), so all twelve hours sit evenly around it as on any real clock.
+    let (half_w, half_h) = (250., 236.);
+    let radius = half_h;
+    let centre = (CENTRE_X, 150. + half_h);
     let face = Rect::new(
-        centre.0 - radius,
-        centre.1 - radius,
-        radius * 2.,
-        radius * 2.,
+        centre.0 - half_w,
+        centre.1 - half_h,
+        half_w * 2.,
+        half_h * 2.,
     );
-    // The face: a deep pane of the dock's glass, lit at its rim.
-    out.shadow(face, radius, 70., 14., 0.32);
+    let corner = 150.;
+    out.shadow(face, corner, 70., 14., 0.32);
     out.draw.push(Draw::Soft(Some(0.8)));
-    out.glass_over(home_backdrop(state, assets), face, radius, c(PLATTER, 0.52));
+    out.glass_over(home_backdrop(state, assets), face, corner, c(PLATTER, 0.52));
     out.draw.push(Draw::Soft(None));
-    out.rim(face, radius, 0.7, 0.1);
+    out.rim(face, corner, 0.7, 0.1);
+    // How far from the centre the outline `inset` inside the face lies, along `angle`.
+    let reach = |angle: f32, inset: f32| {
+        let (a, b) = (half_w - inset, half_h - inset);
+        let (x, y) = (angle.sin(), angle.cos());
+        const N: f32 = 4.;
+        ((x / a).abs().powf(N) + (y / b).abs().powf(N)).powf(-1. / N)
+    };
     let at = |angle: f32, distance: f32| {
         (
             centre.0 + distance * angle.sin(),
             centre.1 - distance * angle.cos(),
         )
     };
-    // A fine minute track, the hours marked bolder within it.
+    // A fine minute track along the edge, the hours bolder; inside it every hour, numbered.
     for mark in 0..60 {
         let hour = mark % 5 == 0;
-        let (length, width, alpha) = if hour { (18., 4., 1.) } else { (9., 2., 0.42) };
-        let outer = radius - 12.;
+        let (length, width, alpha) = if hour { (18., 4.5, 1.) } else { (9., 2., 0.4) };
+        let angle = mark as f32 / 60. * TAU;
+        let outer = reach(angle, 16.);
         out.draw.push(Draw::Rotated(
             Rect::new(centre.0 - width / 2., centre.1 - outer, width, length),
             width / 2.,
-            mark as f32 / 60. * TAU,
+            angle,
             centre,
             c(0xffffff, alpha),
         ));
     }
-    // Every hour numbered, upright and large: a glance from the sofa reads it.
-    let numeral = text(42., 600, -0.02);
+    let numeral = text(46., 600, -0.02);
     for hour in 1..=12 {
-        let (x, y) = at(hour as f32 / 12. * TAU, radius - 64.);
+        let angle = hour as f32 / 12. * TAU;
+        let (x, y) = at(angle, reach(angle, 66.));
         out.text(
             hour.to_string(),
-            Rect::new(x - 40., y - 26., 80., 52.),
+            Rect::new(x - 44., y - 29., 88., 58.),
             numeral,
-            c(0xffffff, 0.95),
+            c(0xffffff, 0.96),
             true,
         );
     }
+    // The date on the dial, as Apple Watch prints it: the day in the second hand's orange, the
+    // date in white, small, between the centre and the 6. Clock and date are one object.
+    let day = text(30., 650, 0.06);
+    let weekday: String = now
+        .weekday()
+        .to_string()
+        .chars()
+        .take(3)
+        .collect::<String>()
+        .to_uppercase();
+    let date = now.day().to_string();
+    let (day_w, date_w) = (assets.width(&weekday, day), assets.width(&date, day));
+    let gap = 10.;
+    let left = centre.0 - (day_w + gap + date_w) / 2.;
+    let y = centre.1 + half_h * 0.36;
+    out.text(
+        weekday,
+        Rect::new(left, y, day_w + 4., 38.),
+        day,
+        c(0xff9f0a, 1.),
+        false,
+    );
+    out.text(
+        date,
+        Rect::new(left + day_w + gap, y, date_w + 4., 38.),
+        day,
+        c(0xffffff, 0.96),
+        false,
+    );
     // Hands move continuously, as a watch's do: the second hand sweeps.
     let seconds = now.second() as f32 + now.nanosecond() as f32 / 1e9;
     let minutes = now.minute() as f32 + seconds / 60.;
@@ -172,11 +226,4 @@ fn analog(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
     ));
     disc(out, 11., orange);
     disc(out, 4., c(0x1c1c1e, 1.));
-    lettering(
-        out,
-        &day_and_date(now),
-        Rect::new(CENTRE_X - 600., face.y + face.h + 24., 1200., 50.),
-        text(40., 600, 0.),
-        0.92,
-    );
 }

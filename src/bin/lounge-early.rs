@@ -163,8 +163,12 @@ mod service {
     }
 
     fn early() -> i32 {
+        script("early")
+    }
+
+    fn script(command: &str) -> i32 {
         Command::new("/bin/sh")
-            .args([SCRIPT, "early"])
+            .args([SCRIPT, command])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -199,11 +203,39 @@ mod service {
         true
     }
 
+    /// As the TV powers off: `home.sh standby` points the next cold boot at Home. Every call
+    /// runs it (an input watched since the last one may have put its own name back).
+    extern "C" fn standby(handle: *mut c_void, message: *mut c_void, _: *mut c_void) -> bool {
+        keep_alive();
+        // SAFETY: LS2 returns the authenticated sender name of this message, or null.
+        let sender = unsafe { LSMessageGetSenderServiceName(message) };
+        if sender.is_null() || unsafe { CStr::from_ptr(sender) }.to_bytes() != CALLER {
+            reply(
+                handle,
+                message,
+                r#"{"returnValue":false,"errorText":"Caller denied"}"#,
+            );
+            return true;
+        }
+        let code = script("standby");
+        reply(
+            handle,
+            message,
+            &format!(r#"{{"returnValue":{},"exitCode":{code}}}"#, code == 0),
+        );
+        true
+    }
+
     pub fn run() -> i32 {
         let methods = [
             LsMethod {
                 name: c"prepare".as_ptr(),
                 function: Some(prepare),
+                flags: 0,
+            },
+            LsMethod {
+                name: c"standby".as_ptr(),
+                function: Some(standby),
                 flags: 0,
             },
             LsMethod {

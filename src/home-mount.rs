@@ -67,6 +67,12 @@ const EARLY: &str = "com.webos.service.loungehome";
 // /media/developer.
 const EARLY_EXE: &str = "/var/lib/lounge/lounge-early";
 const EARLY_FILTER: &str = "/var/lib/lounge/home-filter.js";
+/// The input webOS reopens first on a cold boot: its boot manager reads
+/// `physicalLastSourceAppId` here (/etc/palm/action-condition.json, "Last Input App") and
+/// launches that app before anything else. Named Home, the boot opens Home and no input at all;
+/// eim keeps the input itself in the other fields, which are left alone.
+const LAST_INPUT: &str = "/var/lib/eim/lastinput";
+const FIRST_APP_KEY: &str = "physicalLastSourceAppId";
 const FILTER_HANDLER: &str = "loungeHomeKey";
 const FILTER_TARGET: &str = "var loungeHomeTarget = 'com.webos.app.home';";
 
@@ -96,7 +102,7 @@ fn early_files() -> std::collections::BTreeMap<String, String> {
         ),
         (
             api.clone(),
-            line(json!({"all": [format!("{EARLY}/prepare")]})),
+            line(json!({"all": [format!("{EARLY}/prepare"), format!("{EARLY}/standby")]})),
         ),
         (
             manifest,
@@ -1138,6 +1144,9 @@ impl<S: System> Home<S> {
         }
         settings.enabled = true;
         self.write_json(CONFIG, &settings)?;
+        if let Err(error) = self.first_app(true) {
+            self.system.log(&format!("first app: {error}"));
+        }
         // The early start, for the way that can have it; without it the hook takes over.
         let early = settings
             .app_dir
@@ -1163,7 +1172,45 @@ impl<S: System> Home<S> {
         if let Err(error) = self.set_early(None) {
             self.system.log(&format!("early start: {error}"));
         }
+        if let Err(error) = self.first_app(false) {
+            self.system.log(&format!("first app: {error}"));
+        }
         self.restore()
+    }
+
+    /// Points the cold boot's first app at Home (`home`), or back at the last input. Called
+    /// when Lounge becomes Home, at each boot and as the TV powers off (an input watched since
+    /// put its own name back); turning Lounge as Home off restores the input. Unchanged files
+    /// are not rewritten.
+    fn first_app(&self, home: bool) -> Result<(), String> {
+        let text = match self.system.read(LAST_INPUT) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("{LAST_INPUT}: {error}")),
+        };
+        let mut record: Value =
+            serde_json::from_str(&text).map_err(|error| format!("{LAST_INPUT}: {error}"))?;
+        let Some(fields) = record.as_object_mut() else {
+            return Err(format!("{LAST_INPUT} is not an object"));
+        };
+        let wanted = if home {
+            HOME.to_owned()
+        } else {
+            // eim's own record of the input.
+            match fields.get("appId").and_then(Value::as_str) {
+                Some(input) if input != HOME => input.to_owned(),
+                _ => "com.webos.app.livetv".to_owned(),
+            }
+        };
+        if fields.get(FIRST_APP_KEY).and_then(Value::as_str) == Some(wanted.as_str()) {
+            return Ok(());
+        }
+        fields.insert(FIRST_APP_KEY.into(), Value::String(wanted.clone()));
+        let text = serde_json::to_string(&record).map_err(|error| error.to_string())?;
+        self.system.write(LAST_INPUT, &text)?;
+        self.system
+            .log(&format!("first app on a cold boot: {wanted}"));
+        Ok(())
     }
 
     /// About 18 s into a cold boot, from lounge-early (the key filter's call): Lounge mounted
@@ -1184,6 +1231,9 @@ impl<S: System> Home<S> {
         let (_, id) = settings.way()?;
         self.mount_early(app_dir, id);
         self.apply(&settings, false)?;
+        if let Err(error) = self.first_app(true) {
+            self.system.log(&format!("first app: {error}"));
+        }
         self.system.log("early: Lounge is Home");
         Ok(())
     }
@@ -1484,6 +1534,10 @@ impl<S: System> Home<S> {
             "disable" => self.disable()?,
             "boot" => self.boot()?,
             "early" => self.early()?,
+            "standby" => {
+                let enabled = self.config()?.is_some_and(|settings| settings.enabled);
+                self.first_app(enabled)?;
+            }
             "apply" => {
                 let settings = self
                     .config()?

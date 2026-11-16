@@ -29,7 +29,7 @@ DIRS='/media/developer/apps/usr/palm/applications/io.github.yashwanthkamireddi.l
 APP=io.github.yashwanthkamireddi.lounge
 COMMAND=${1:-boot}
 case "$COMMAND" in
-  enable|disable|status|apply|refresh|boot|early) ;;
+  enable|disable|status|apply|refresh|boot|early|standby) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR [HOME_ID]] | disable | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' '{"returnValue":false,"errorText":"Run as root"}'; exit 1; }
@@ -69,6 +69,14 @@ if [ "$COMMAND" = early ]; then
   exec 9>"$LOCK"
   flock -w 20 9 || exit 1
   exec "$APP_DIR/lounge" --home early </dev/null >>"$BOOT_LOG" 2>&1
+fi
+if [ "$COMMAND" = standby ]; then
+  # From lounge-early as the TV powers off: point the next cold boot's first app at Home.
+  APP_DIR=$(saved)
+  [ -n "$APP_DIR" ] && [ -x "$APP_DIR/lounge" ] || exit 1
+  exec 9>"$LOCK"
+  flock -w 10 9 || exit 1
+  exec "$APP_DIR/lounge" --home standby </dev/null >>"$BOOT_LOG" 2>&1
 fi
 if [ "$COMMAND" = boot ]; then
   # Nothing at all happens at boot unless Lounge is enabled as Home and still installed.

@@ -51,6 +51,8 @@ pub struct TextStyle {
     /// left: text growing with a focused card keeps one layout, so it scales
     /// smoothly instead of stepping through re-laid-out sizes.
     pub scale: f32,
+    /// Set in the big clock's own figures (`text::CLOCK_FONT`): digits and the colon only.
+    pub clock: bool,
 }
 impl TextStyle {
     pub const fn new(size: f32) -> Self {
@@ -61,6 +63,7 @@ impl TextStyle {
             line_height: 1.2,
             align_right: false,
             scale: 1.,
+            clock: false,
         }
     }
     pub const fn scaled(mut self, scale: f32) -> Self {
@@ -77,6 +80,10 @@ impl TextStyle {
     }
     pub const fn leading(mut self, height: f32) -> Self {
         self.line_height = height;
+        self
+    }
+    pub const fn clock(mut self) -> Self {
+        self.clock = true;
         self
     }
     pub const fn right(mut self) -> Self {
@@ -98,6 +105,9 @@ pub enum Draw {
     /// shape's.
     Rotated(Rect, f32, f32, (f32, f32), Color),
     Text(String, Rect, TextStyle, Color, bool),
+    /// Centred text made of Liquid Glass: filled with the pre-blurred backdrop (the path) at the
+    /// glyphs' own screen position, `Color` its light (above 1 brightens) and opacity.
+    GlassText(String, Rect, TextStyle, Color, String),
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
     /// A full-screen backdrop texture sampled at `rect`'s own screen position,
@@ -248,6 +258,8 @@ enum BatchKind {
         origin: [f32; 2],
         scale: f32,
         tint: Color,
+        /// Filled with this backdrop texture instead of a colour (`Draw::GlassText`).
+        glass: Option<GLuint>,
     },
     /// Glass over two backdrops mixed in one pass (glass.frag, GLASS_MIX).
     GlassMix {
@@ -339,6 +351,11 @@ pub struct Renderer {
     text_uniforms: Uniforms,
     vector_program: GLuint,
     text_program: GLuint,
+    /// Text filled with a backdrop (vector.frag, GLASS_TEXT); 0 where it did not link.
+    glass_text_program: GLuint,
+    glass_text_uniforms: Uniforms,
+    /// The backdrop the text being laid out now is filled with.
+    text_glass: Option<GLuint>,
     buffer: GLuint,
     vao: GLuint,
     white: Texture,
@@ -436,6 +453,8 @@ impl Renderer {
             fragment_prefix.clone()
         };
         let vertex_prefix_dissolve = vertex_prefix.clone();
+        let (vertex_prefix_glass_text, fragment_prefix_glass_text) =
+            (vertex_prefix.clone(), fragment_prefix.clone());
         let mut cache = ProgramCache::new(shader_cache.filter(|_| gles));
         let program = cache.link(
             &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
@@ -495,6 +514,20 @@ impl Renderer {
                     gl::DeleteProgram(vector_program);
                 }
                 return Err(error);
+            }
+        };
+        // Optional, as the glass mix: without it glass text is drawn as plain text.
+        let glass_text_program = match cache.link(
+            &(vertex_prefix_glass_text + include_str!("shaders/text.vert")),
+            &(fragment_prefix_glass_text
+                + "#define GLASS_TEXT\n"
+                + include_str!("shaders/vector.frag")),
+            &[c"a_position", c"a_offset", c"a_origin", c"a_coverage"],
+        ) {
+            Ok(program) => program,
+            Err(error) => {
+                eprintln!("Lounge glass text shader unavailable, drawing plain text: {error}");
+                0
             }
         };
         let mut dissolve_programs = [0; 2];
@@ -580,6 +613,9 @@ impl Renderer {
             dissolve_uniforms,
             vector_uniforms: Uniforms::of(vector_program),
             text_uniforms: Uniforms::of(text_program),
+            glass_text_uniforms: Uniforms::of(glass_text_program),
+            glass_text_program,
+            text_glass: None,
             program,
             vector_program,
             text_program,
@@ -1140,7 +1176,7 @@ impl Renderer {
             }
             self.rank = rank;
             let skipped = match command {
-                Draw::Text(..) => no_text,
+                Draw::Text(..) | Draw::GlassText(..) => no_text,
                 Draw::Shadow(..) => no_shadow,
                 Draw::Image(path, ..) | Draw::TintedImage(path, ..) => {
                     if path.ends_with(".lvec") {
@@ -1184,7 +1220,7 @@ impl Renderer {
                 Draw::Rotated(rect, _, angle, pivot, _) => {
                     Some(("shape", rotated_bounds(*rect, *angle, *pivot)))
                 }
-                Draw::Text(_, rect, ..) => Some(("text", *rect)),
+                Draw::Text(_, rect, ..) | Draw::GlassText(_, rect, ..) => Some(("text", *rect)),
                 Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) => Some((
                     if path.ends_with(".lvec") {
                         "vector"
@@ -1239,6 +1275,19 @@ impl Renderer {
                 ),
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
+                }
+                Draw::GlassText(text, rect, size, color, backdrop) => {
+                    // Not loaded yet, or no glass program: the figures in plain white meanwhile.
+                    self.text_glass = (self.glass_text_program != 0)
+                        .then(|| self.backdrop_texture(backdrop))
+                        .flatten();
+                    let color = if self.text_glass.is_some() {
+                        *color
+                    } else {
+                        [1., 1., 1., color[3]]
+                    };
+                    self.text(text, *rect, *size, color, true);
+                    self.text_glass = None;
                 }
                 Draw::Image(path, rect, radius, contain) => {
                     self.image(path, *rect, *radius, *contain, [1.; 4])
@@ -1547,13 +1596,23 @@ impl Renderer {
                         origin,
                         scale,
                         tint,
+                        glass,
                     } => {
                         let Some(mesh) = self.text_runs.get(key).and_then(|run| run.mesh.as_ref())
                         else {
                             continue;
                         };
+                        let program = if let Some(texture) = glass {
+                            gl::ActiveTexture(gl::TEXTURE0);
+                            gl::BindTexture(gl::TEXTURE_2D, *texture);
+                            gl::UseProgram(self.glass_text_program);
+                            gl::Uniform1i(self.glass_text_uniforms.texture, 0);
+                            self.glass_text_program
+                        } else {
+                            self.text_program
+                        };
                         self.draw_mesh(
-                            self.text_program,
+                            program,
                             mesh,
                             [*scale, *scale, origin[0], origin[1]],
                             *tint,
@@ -1612,14 +1671,17 @@ impl Renderer {
         embolden: f32,
     ) {
         let viewport = self.stats.viewport;
-        let uniforms = if program == self.text_program {
+        let text = program == self.text_program || program == self.glass_text_program;
+        let uniforms = if program == self.glass_text_program {
+            self.glass_text_uniforms
+        } else if program == self.text_program {
             self.text_uniforms
         } else {
             self.vector_uniforms
         };
         unsafe {
             gl::UseProgram(program);
-            if program == self.text_program {
+            if text {
                 gl::Uniform1f(
                     uniforms.fringe,
                     if self.stats.multisample_samples > 1 {
@@ -1942,6 +2004,9 @@ impl Drop for Renderer {
             }
             gl::DeleteProgram(self.vector_program);
             gl::DeleteProgram(self.text_program);
+            if self.glass_text_program != 0 {
+                gl::DeleteProgram(self.glass_text_program);
+            }
             if self.vao != 0 {
                 gl::DeleteVertexArrays(1, &self.vao);
             }

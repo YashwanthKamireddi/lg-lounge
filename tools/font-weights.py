@@ -45,4 +45,18 @@ for weight in (350, 400, 450, 500, 550, 600, 650, 800):
             chr(codepoint): advances[glyph][0] / units
             for codepoint, glyph in instance.getBestCmap().items()
         }
+# The big clock's figures (src/view/clock.rs): tall and narrow, as the Lock Screen's, cut from
+# the condensed end of SF Pro's width axis; with Inter (no width axis) its display weight.
+if len(sys.argv) > 2:
+    clock = TTFont(sys.argv[2])
+    options = subset.Options()
+    options.layout_features = ["tnum", "kern"]
+    options.notdef_outline = True
+    subsetter = subset.Subsetter(options=options)
+    subsetter.populate(text="0123456789: ")
+    subsetter.subset(clock)
+    clock = instantiateVariableFont(clock, {"wdth": 46, "wght": 620, "opsz": 28})
+    clock.save(directory / "font-clock.ttf")
+else:
+    (directory / "font-clock.ttf").write_bytes((directory / "font-display-500.ttf").read_bytes())
 (directory / "font-metrics.json").write_text(json.dumps(metrics, ensure_ascii=False), encoding="utf8")

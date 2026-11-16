@@ -9,8 +9,13 @@ pub(super) fn embolden(physical_size: f32) -> f32 {
     0.25 * ((28. - physical_size) / 12.).clamp(0., 1.)
 }
 
+/// The big clock's own figures (tools/font-weights.py), tall and narrow.
+pub(super) const CLOCK_FONT: u16 = 3000;
+
 pub(super) fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
-    let name = if id >= 1000 {
+    let name = if id == CLOCK_FONT {
+        "font-clock.ttf".to_owned()
+    } else if id >= 1000 {
         format!("font-display-{}.ttf", id - 1000)
     } else {
         format!("font-{id}.ttf")
@@ -20,6 +25,7 @@ pub(super) fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
     let bytes = std::fs::read(&path)
         .map_err(|e| format!("Font {}: {e}. Regenerate native assets.", path.display()))?;
     let font = Font::from_bytes(bytes).map_err(|e| format!("Font {}: {e}", path.display()))?;
+    let font = if id == CLOCK_FONT { font.fine() } else { font };
     if cfg!(feature = "webos") {
         eprintln!(
             "Lounge font: {name} loaded in {} ms",
@@ -206,6 +212,7 @@ impl Renderer {
             ],
             flags: u8::from(style.align_right)
                 | (u8::from(centered) << 1)
+                | (u8::from(style.clock) << 3)
                 | (u8::from(self.stats.multisample_samples > 1) << 2),
         };
         if self.text_runs.contains_key(&key) {
@@ -213,7 +220,11 @@ impl Renderer {
             return;
         }
         let rect = Rect::new(0., 0., rect.w, rect.h);
-        let font_id = style.weight + if style.size >= 32. { 1000 } else { 0 };
+        let font_id = if style.clock {
+            CLOCK_FONT
+        } else {
+            style.weight + if style.size >= 32. { 1000 } else { 0 }
+        };
         if !self.ensure_font(font_id) {
             self.stats.glyph_failures += text.chars().count();
             return;
@@ -371,6 +382,7 @@ impl Renderer {
                     origin,
                     scale,
                     tint,
+                    glass: self.text_glass,
                 },
                 clip: self.clip,
                 fade: self.fade,
