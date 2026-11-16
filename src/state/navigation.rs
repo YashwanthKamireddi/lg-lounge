@@ -379,6 +379,10 @@ impl State {
                     // Its grid index still defines the route; reveal_focus then
                     // scrolls it into view, without letting the fixed nav steal Up.
                     let next = match direction {
+                        // A held Up stops at the dock, as tvOS stops a held arrow at an edge:
+                        // scrolling up the grid never runs on into Top Shelf and the Inputs
+                        // button. A new press goes on.
+                        Direction::Up if index < APPS_COLUMNS && self.held => None,
                         // Up from the dock: Top Shelf full screen first for an app with art
                         // (Down returns), then the Inputs button beside the time pill. Only
                         // apps with Top Shelf art go full screen: a lone wallpaper without

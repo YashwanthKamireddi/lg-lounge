@@ -10,6 +10,11 @@ var loungeHomeEarly = ''; // "" until lounge-early answers, then "ready" or "fai
 var loungeHomeTries = 0;
 var loungeHomeFront = '';
 var loungeHomeLaunches = 0;
+// A wake from standby (Quick Start+) is not a boot: webOS reopens the last input and LG's Home
+// puts itself over it when "Home Auto Launch" is on. True for the few seconds after a wake.
+var loungeHomeWaking = false;
+var loungeHomePower = '';
+var loungeHomeAuto = true; // the TV's "Home Auto Launch" setting
 // The selected Home target; the native helper (src/home-mount.rs) writes it into the installed copy.
 var loungeHomeTarget = 'com.webos.app.home';
 
@@ -48,9 +53,10 @@ function loungeHomeIsInput(id) {
 }
 
 function loungeHomeOpen() {
+  var booting = loungeHomeEarly === 'ready' && loungeHomeBoot === 'booting';
   if (
-    loungeHomeEarly !== 'ready' ||
-    loungeHomeBoot !== 'booting' ||
+    !loungeHomeAuto ||
+    (!booting && !loungeHomeWaking) ||
     loungeHomeFront === loungeHomeTarget ||
     loungeHomeLaunches >= 4
   )
@@ -74,6 +80,21 @@ function loungeHomeOpen() {
     JSON.stringify({ id: loungeHomeTarget }),
     function () {},
   );
+}
+
+// Each wake from standby opens Home again over the input webOS reopens, as LG's Home does.
+function loungeHomePowerChanged(state) {
+  var was = loungeHomePower;
+  loungeHomePower = state;
+  if (state !== 'Active' || !was || was === 'Active' || was === 'Screen Off') return;
+  loungeHomeWaking = true;
+  loungeHomeLaunches = 0;
+  loungeHomeWaitOver = false;
+  loungeHomeWaiting = false;
+  genericTimer.set(15000, function () {
+    loungeHomeWaking = false;
+  });
+  loungeHomeOpen();
 }
 
 // Called by LG's compositor once the file is loaded.
@@ -110,6 +131,35 @@ function init() {
           var r = loungeHomeParse(payload);
           loungeHomeFront = (r && r.appId) || '';
           loungeHomeOpen();
+        } catch (error) {
+          console.warn('lounge home filter: ' + error);
+        }
+      },
+      true,
+    );
+    lunaCall.subscribe(
+      'com.webos.service.tvpower',
+      '/power/getPowerState',
+      '{}',
+      function (payload) {
+        try {
+          var r = loungeHomeParse(payload);
+          if (r && typeof r.state === 'string') loungeHomePowerChanged(r.state);
+        } catch (error) {
+          console.warn('lounge home filter: ' + error);
+        }
+      },
+      true,
+    );
+    lunaCall.subscribe(
+      'com.webos.settingsservice',
+      '/getSystemSettings',
+      '{"category":"general","keys":["homeAutoLaunch"]}',
+      function (payload) {
+        try {
+          var r = loungeHomeParse(payload);
+          var auto = r && r.settings && r.settings.homeAutoLaunch;
+          if (typeof auto === 'string') loungeHomeAuto = auto !== 'off';
         } catch (error) {
           console.warn('lounge home filter: ' + error);
         }

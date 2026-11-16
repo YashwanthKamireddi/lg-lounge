@@ -397,8 +397,12 @@ pub struct State {
     pub bar_return: Option<Target>,
     /// When Back closed the Inputs panel: it shrinks back into its button meanwhile.
     pub inputs_closed: Option<Instant>,
+    /// The row lit when the Inputs panel closed: it stays lit while the panel fades.
+    pub inputs_lit: Target,
     /// Full-screen Top Shelf: Up from the dock lowers it off screen.
     pub expanded: bool,
+    /// The arrow being handled is a held key's repeat: it stops at edges.
+    pub held: bool,
     /// When Top Shelf mode last began; its chevron bobs for a moment.
     pub shelf_since: Option<Instant>,
     /// The app whose Top Shelf art shows; it stays while the pill has focus.
@@ -557,7 +561,9 @@ impl State {
             options_closed: None,
             bar_return: None,
             inputs_closed: None,
+            inputs_lit: Target::InputsButton,
             expanded: false,
+            held: false,
             shelf_since: Some(crate::clock::now()),
             shelf_app: None,
             shelf_pending: None,

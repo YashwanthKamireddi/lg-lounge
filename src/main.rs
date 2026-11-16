@@ -657,6 +657,7 @@ fn run() -> Result<(), String> {
         partial,
         rewarm,
         glyphs_warming,
+        grid_warmed: false,
         uploads_pending: false,
         last_refresh,
         running,
@@ -716,6 +717,8 @@ struct Shell {
     partial: damage::Partial,
     rewarm: bool,
     glyphs_warming: bool,
+    /// The grid's scenes have been drawn once offscreen (`Renderer::warm`).
+    grid_warmed: bool,
     /// Decoded images still waiting to go up to the GPU (see `Preload::pump`).
     uploads_pending: bool,
     last_refresh: Instant,
@@ -835,6 +838,27 @@ impl Shell {
             // A few milliseconds a pass: as many glyphs as the CPU makes in that time, so a
             // press waits at most that long, and the warming ends in far fewer wakes.
             self.glyphs_warming = self.renderer.warm_glyphs(Duration::from_millis(4));
+        }
+        // Once the glyphs are warm and Home is quiet: the grid half risen and fully risen, drawn
+        // once where nobody sees them.
+        if !self.grid_warmed
+            && !self.glyphs_warming
+            && self.presence.visible
+            && self.state.page == state::Page::Apps
+            && !self.state.dirty
+            && !self.state.animating()
+        {
+            self.grid_warmed = true;
+            let (scroll, shown) = (self.state.scroll, self.state.shown_scroll);
+            for amount in [0.5, 1.] {
+                self.state.scroll = state::GRID_SCROLL * amount;
+                self.state.shown_scroll = self.state.scroll;
+                let scene = view::scene(&self.state, &self.assets, OffsetDateTime::now_utc());
+                self.renderer.warm(&scene.draw);
+            }
+            self.state.scroll = scroll;
+            self.state.shown_scroll = shown;
+            self.state.dirty = false;
         }
         self.uploads_pending =
             self.preload

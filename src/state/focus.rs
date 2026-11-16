@@ -15,6 +15,12 @@ impl State {
         }
     }
 
+    /// The target focus is leaving and how far (eased 0..1) the move to the new one has come.
+    pub fn focus_move(&self) -> Option<(&Target, f32)> {
+        let (from, start, _) = self.focus_from.as_ref()?;
+        Some((from, eased(start)))
+    }
+
     pub fn track_focus(&mut self) {
         if self.focus != self.last_focus {
             let level = self.focus_since.as_ref().map_or(1., eased);

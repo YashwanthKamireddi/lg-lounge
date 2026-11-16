@@ -1285,6 +1285,13 @@ impl<S: System> Home<S> {
             self.system.pause(2000);
         }
         self.apply(&settings, false)?;
+        // A package update replaces the app but not these copies: bring them up to date for the
+        // next boot.
+        if method == Method::Executable
+            && let Err(error) = self.set_early(Some((app_dir, id)))
+        {
+            self.system.log(&format!("early start: {error}"));
+        }
         self.home_after_boot(id);
         Ok(())
     }
