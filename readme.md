@@ -36,17 +36,6 @@ the GPU directly and does nothing when nothing changes.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    R[Remote] --> E[SDL events]
-    E --> S[State]
-    S --> V[View]
-    V --> D[Draw list]
-    D --> G[OpenGL ES]
-    G --> P[TV graphics plane]
-    W[Workers: Luna subscriptions, image decoding, weather, phone photos] -. one coalesced wake .-> E
-```
-
 - **State** holds what is on screen and what each remote press does. It is plain data with no I/O,
   so behaviour is unit-tested without a TV or a GPU.
 - **View** turns state into a draw list each frame. Text and icons are vector outlines
