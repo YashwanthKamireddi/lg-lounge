@@ -286,25 +286,14 @@ pub(super) fn inputs_panel(out: &mut Scene, state: &State, assets: &Assets) {
             row_h,
         )
     };
-    // One highlight, placed where focus is on its way to (focus amounts weight the rows).
-    let focus: Vec<f32> = choices
+    // One highlight, on the focused row. It moves in one step: gliding between rows, mid-way
+    // it cut both rows' text in half and read as a smear.
+    let lit_y = choices
         .iter()
         .enumerate()
-        .map(|(index, (id, ..))| state.focus_amount(&target(index, id)))
-        .collect();
-    let total: f32 = focus.iter().sum();
-    // Where the highlight is: between the rows focus is moving between.
-    let lit_y = (total > 0.01).then(|| {
-        focus
-            .iter()
-            .enumerate()
-            .map(|(index, amount)| row_rect(index).y * amount)
-            .sum::<f32>()
-            / total
-    });
+        .find(|(index, (id, ..))| state.focus == target(*index, id))
+        .map(|(index, _)| row_rect(index).y);
     if let Some(y) = lit_y {
-        // At full strength from the first frame: it glides between rows rather than fading,
-        // so no frame shows grey text on a half-white bar.
         let lit = Rect::new(panel.x + pad, y, panel.w - pad * 2., row_h);
         out.shadow(lit, 24., 16., 4., 0.18);
         out.draw.push(Draw::Soft(Some(SOFT_EDGE)));
