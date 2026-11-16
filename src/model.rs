@@ -163,7 +163,9 @@ pub struct Preferences {
     pub top_shelf_art: bool,
     pub reduced_motion: bool,
     /// A white ring around what has focus, besides its lift: easier to follow from across
-    /// the room.
+    /// the room. Saved under a new name since it became the default, so every TV starts with
+    /// it on (the old key, saved off everywhere, is ignored); it can still be turned off.
+    #[serde(rename = "focus_ring")]
     pub focus_outline: bool,
     /// App names under the tiles a size larger.
     pub large_names: bool,
@@ -217,7 +219,8 @@ impl Default for Preferences {
             show_names: false,
             top_shelf_art: false,
             reduced_motion: false,
-            focus_outline: false,
+            // On by default: the lift alone was hard to follow from across the room.
+            focus_outline: true,
             large_names: false,
             home_offered: false,
             input_modes: BTreeMap::new(),

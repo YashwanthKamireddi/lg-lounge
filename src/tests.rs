@@ -2162,20 +2162,26 @@ fn a_slow_launch_says_it_is_on_its_way_then_that_it_is_slow() {
 #[test]
 fn focus_outline_and_larger_names_are_switches_in_general_that_persist() {
     let mut state = ready();
+    // The focus ring is on from the start, also for preferences saved before it was (their old
+    // key is not read).
+    assert!(state.preferences.focus_outline);
+    let old: crate::model::Preferences =
+        serde_json::from_str(r#"{"focus_outline": false}"#).unwrap();
+    assert!(old.focus_outline);
     state.page = Page::Settings;
-    state.section = 0;
+    state.section = crate::state::ACCESS_SECTION;
     state.focus = Target::Setting(11);
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.focus_outline);
+    assert!(!state.preferences.focus_outline);
     state.focus = Target::Setting(12);
     state.activate();
     assert!(state.preferences.large_names);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let read: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
-    assert!(read.focus_outline && read.large_names);
-    // Older preference files, without them, read as off.
+    assert!(!read.focus_outline && read.large_names);
+    // Older preference files, without them: the ring on, larger names off.
     let old: crate::model::Preferences = serde_json::from_str("{}").unwrap();
-    assert!(!old.focus_outline && !old.large_names);
+    assert!(old.focus_outline && !old.large_names);
 }
 
 #[test]

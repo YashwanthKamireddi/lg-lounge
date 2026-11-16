@@ -47,7 +47,9 @@ pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 324.;
 pub const HOME_TILE_PITCH: f32 = 354.;
-pub const FOCUS_MS: f32 = 260.;
+/// How long focus takes to land on the next control: short, so the highlight is where the
+/// press went before the eye looks for it.
+pub const FOCUS_MS: f32 = 180.;
 /// tvOS 26 home, five large icons a row (324x194, Apple's 5:3): in Top Shelf
 /// mode the dock icons sit at y=780 with the next row peeking at the bottom;
 /// scrolling by GRID_SCROLL brings the dock to the top (y=90) for the grid.
