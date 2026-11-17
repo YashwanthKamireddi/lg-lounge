@@ -362,6 +362,9 @@ impl System for Fake {
                     let inode = Self::inode(&state, args[1]).unwrap();
                     let root = if args[1] == STAGE {
                         STAGE_ROOT
+                    } else if args[1] == "/var/lib/lounge/screensaver.qml" {
+                        // Relative to /var's own file system, as on the TV.
+                        "/lib/lounge/screensaver.qml"
                     } else {
                         OUR_ROOT
                     };
@@ -1772,4 +1775,33 @@ fn a_cold_boot_opens_home_first_and_disable_gives_the_input_back() {
         first(&home)["physicalLastSourceAppId"],
         "com.webos.app.hdmi2"
     );
+}
+
+#[test]
+fn lounge_s_clock_is_the_screen_saver_while_it_is_home() {
+    let target = "/usr/palm/applications/com.webos.app.screensaver/qml/main.qml";
+    let home = tv(Options {
+        normal_running: true,
+        ..Options::default()
+    });
+    home.state()
+        .files
+        .insert(target.into(), "// LG's saver".into());
+    home.run("enable").unwrap();
+    let state = home.state();
+    let copy = &state.files["/var/lib/lounge/screensaver.qml"];
+    assert!(copy.contains(&format!("file://{APP_DIR}/assets/")));
+    assert!(copy.contains("_WEBOS_WINDOW_TYPE_SCREENSAVER"));
+    drop(state);
+    assert!(home.calls().contains(&format!(
+        "mount --bind /var/lib/lounge/screensaver.qml {target}"
+    )));
+    home.run("disable").unwrap();
+    assert!(
+        !home
+            .state()
+            .files
+            .contains_key("/var/lib/lounge/screensaver.qml")
+    );
+    assert!(home.calls().contains(&format!("umount {target}")));
 }

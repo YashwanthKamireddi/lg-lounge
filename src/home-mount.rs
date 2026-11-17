@@ -73,6 +73,11 @@ const EARLY_FILTER: &str = "/var/lib/lounge/home-filter.js";
 /// eim keeps the input itself in the other fields, which are left alone.
 const LAST_INPUT: &str = "/var/lib/eim/lastinput";
 const FIRST_APP_KEY: &str = "physicalLastSourceAppId";
+/// webOS draws its screen saver from this QML file; Lounge binds its clock (tv/screensaver.qml)
+/// over it, from its own copy here.
+const SAVER_TARGET: &str = "/usr/palm/applications/com.webos.app.screensaver/qml/main.qml";
+const SAVER: &str = "/var/lib/lounge/screensaver.qml";
+const SAVER_ASSETS: &str = "file:///media/developer/apps/usr/palm/applications/io.github.yashwanthkamireddi.lounge/assets/";
 const FILTER_HANDLER: &str = "loungeHomeKey";
 const FILTER_TARGET: &str = "var loungeHomeTarget = 'com.webos.app.home';";
 
@@ -245,6 +250,15 @@ pub fn ours(root: Option<&str>) -> bool {
         root.strip_suffix("//deleted")
             .unwrap_or(root)
             .ends_with("/io.github.yashwanthkamireddi.lounge/lounge")
+    })
+}
+
+/// Only a mount of Lounge's own screen saver copy is Lounge's; another saver's is left alone.
+pub fn saver_ours(root: Option<&str>) -> bool {
+    root.is_some_and(|root| {
+        root.strip_suffix("//deleted")
+            .unwrap_or(root)
+            .ends_with("/lounge/screensaver.qml")
     })
 }
 
@@ -1156,6 +1170,9 @@ impl<S: System> Home<S> {
         if let Err(error) = self.set_early(early) {
             self.system.log(&format!("early start: {error}"));
         }
+        if let Err(error) = self.set_saver(settings.app_dir.as_deref()) {
+            self.system.log(&format!("screen saver: {error}"));
+        }
         // A normal Lounge (the one that asked, say) would write the same settings: Home
         // replaces it.
         if let Err(error) = self.close_normal() {
@@ -1175,7 +1192,46 @@ impl<S: System> Home<S> {
         if let Err(error) = self.first_app(false) {
             self.system.log(&format!("first app: {error}"));
         }
+        if let Err(error) = self.set_saver(None) {
+            self.system.log(&format!("screen saver: {error}"));
+        }
         self.restore()
+    }
+
+    /// Lounge's clock as the TV's screen saver (`app_dir`: the installed Lounge whose fonts it
+    /// draws with), or webOS's own back (None). A saver another integration mounted stays.
+    fn set_saver(&self, app_dir: Option<&str>) -> Result<(), String> {
+        let root = self.mount_root(SAVER_TARGET)?;
+        if root.is_some() && !saver_ours(root.as_deref()) {
+            return Err("another screen saver is mounted over webOS's; it stays".into());
+        }
+        let Some(app_dir) = app_dir else {
+            if root.is_some() {
+                self.unmount(SAVER_TARGET, saver_ours)?;
+            }
+            return self.system.unlink(SAVER);
+        };
+        // A webOS without a QML screen saver keeps its own.
+        if !self.system.exists(SAVER_TARGET) {
+            return Ok(());
+        }
+        let source = include_str!("../tv/screensaver.qml");
+        if !source.contains(SAVER_ASSETS) {
+            return Err("screensaver.qml has no assets line".into());
+        }
+        let text = source.replace(SAVER_ASSETS, &format!("file://{app_dir}/assets/"));
+        if root.is_some() && self.system.read(SAVER).is_ok_and(|current| current == text) {
+            return Ok(());
+        }
+        // A rewritten copy is a new file: the old mount would keep showing the old one.
+        if root.is_some() {
+            self.unmount(SAVER_TARGET, saver_ours)?;
+        }
+        self.system.write(SAVER, &text)?;
+        self.system
+            .run("/bin/mount", &["--bind", SAVER, SAVER_TARGET])?;
+        self.system.log("screen saver: Lounge's clock");
+        Ok(())
     }
 
     /// Points the cold boot's first app at Home (`home`), or back at the last input. Called
@@ -1341,6 +1397,10 @@ impl<S: System> Home<S> {
             && let Err(error) = self.set_early(Some((app_dir, id)))
         {
             self.system.log(&format!("early start: {error}"));
+        }
+        // Mounts end with each power cycle: the clock goes back over webOS's saver.
+        if let Err(error) = self.set_saver(Some(app_dir)) {
+            self.system.log(&format!("screen saver: {error}"));
         }
         self.home_after_boot(id);
         Ok(())
