@@ -2014,6 +2014,28 @@ impl Drop for Renderer {
     }
 }
 
+/// The screen box a `Draw::Rotated` covers.
+pub fn rotated_bounds(rect: Rect, angle: f32, pivot: (f32, f32)) -> Rect {
+    let (sin, cos) = angle.sin_cos();
+    let corners = [
+        (rect.x, rect.y),
+        (rect.x + rect.w, rect.y),
+        (rect.x, rect.y + rect.h),
+        (rect.x + rect.w, rect.y + rect.h),
+    ]
+    .map(|(x, y)| {
+        let (px, py) = (x - pivot.0, y - pivot.1);
+        (pivot.0 + px * cos - py * sin, pivot.1 + px * sin + py * cos)
+    });
+    let (x0, x1) = corners
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.0), b.max(c.0)));
+    let (y0, y1) = corners
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.1), b.max(c.1)));
+    Rect::new(x0, y0, x1 - x0, y1 - y0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2091,26 +2113,4 @@ mod tests {
         // Even a glyph drawn last frame goes: its run is already built.
         assert!(glyphs.is_empty());
     }
-}
-
-/// The screen box a `Draw::Rotated` covers.
-pub fn rotated_bounds(rect: Rect, angle: f32, pivot: (f32, f32)) -> Rect {
-    let (sin, cos) = angle.sin_cos();
-    let corners = [
-        (rect.x, rect.y),
-        (rect.x + rect.w, rect.y),
-        (rect.x, rect.y + rect.h),
-        (rect.x + rect.w, rect.y + rect.h),
-    ]
-    .map(|(x, y)| {
-        let (px, py) = (x - pivot.0, y - pivot.1);
-        (pivot.0 + px * cos - py * sin, pivot.1 + px * sin + py * cos)
-    });
-    let (x0, x1) = corners
-        .iter()
-        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.0), b.max(c.0)));
-    let (y0, y1) = corners
-        .iter()
-        .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.1), b.max(c.1)));
-    Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
