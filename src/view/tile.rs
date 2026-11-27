@@ -179,41 +179,6 @@ pub(super) fn tile_face(out: &mut Scene, assets: &Assets, app: &App, rect: Rect,
             );
         }
         // No outline: tvOS icons have none, and a border pass shades the whole tile.
-    } else if app.brand == "lounge-input" {
-        // An input: the system tiles' grey with the HDMI glyph over its
-        // port's name (the glyph alone cannot tell HDMI 1 from HDMI 2).
-        out.draw.push(Draw::RoundedGradient(
-            rect,
-            radius,
-            c(0x9a9aa0, 1.),
-            c(0x6e6e74, 1.),
-        ));
-        let size = rect.h * 0.4;
-        out.icon(
-            assets,
-            "input-hdmi",
-            Rect::new(
-                rect.x + (rect.w - size) / 2.,
-                rect.y + rect.h * 0.13,
-                size,
-                size,
-            ),
-            WHITE,
-        );
-        // Laid out once, for a resting card, and drawn at the card's scale:
-        // a focus lift or the switcher's glide grows it smoothly with the
-        // card, where re-laying it out stepped it through half-pixel sizes.
-        let scale = rect.h / super::FACE_HEIGHT;
-        // Whole pixels: the layout is the run's cache key, and the width
-        // unscaled again varies in its last bits from frame to frame.
-        let (width, height) = ((rect.w / scale).round(), super::FACE_HEIGHT);
-        out.text(
-            &app.title,
-            Rect::new(rect.x, rect.y + rect.h * 0.56, width, height * 0.24),
-            text(height * 0.17, 650, 0.).scaled(scale),
-            WHITE,
-            true,
-        );
     } else {
         let logo = crate::branding::for_key(&app.brand);
         // Artwork Lounge ships always wins: it is there from the first frame,

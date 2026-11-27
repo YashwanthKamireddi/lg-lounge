@@ -66,10 +66,6 @@ impl TextStyle {
             clock: false,
         }
     }
-    pub const fn scaled(mut self, scale: f32) -> Self {
-        self.scale = scale;
-        self
-    }
     pub const fn weight(mut self, weight: u16) -> Self {
         self.weight = weight;
         self
