@@ -379,6 +379,8 @@ pub struct State {
     pub shelf: BTreeMap<String, ShelfRow>,
     /// When the pins' uploads were last asked for.
     pub pins_refreshed: Option<Instant>,
+    /// The remote's or the pointer's last use: nobody at the TV for long, nothing is fetched.
+    pub last_input: Option<Instant>,
     /// Outgoing focus target, when it started shrinking, and how focused it was then.
     pub focus_from: Option<(Target, Instant, f32)>,
     focus_since: Option<Instant>,
@@ -588,6 +590,7 @@ impl State {
             weather: weather::Weather::default(),
             shelf: BTreeMap::new(),
             pins_refreshed: None,
+            last_input: None,
             focus_from: None,
             focus_since: None,
             last_focus: Target::Nav(0),
