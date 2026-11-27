@@ -79,6 +79,33 @@ fn ago(published: &str, now: OffsetDateTime) -> Option<String> {
     })
 }
 
+/// `text` in at most `lines` lines of `width`, ending at a word with "…" where it is longer, as
+/// Apple's titles do (cut by the line box, it ended mid-word with nothing to say so). Measured
+/// with a margin: for scripts without metrics the measure is an estimate, and the renderer
+/// must not wrap a line more.
+fn fit_lines(assets: &Assets, text: &str, style: TextStyle, width: f32, lines: usize) -> String {
+    let width = width * 0.92;
+    if assets.lines(text, style, width) <= lines {
+        return text.to_owned();
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let fits = |count: usize| {
+        let candidate = format!("{}…", words[..count].join(" "));
+        (assets.lines(&candidate, style, width) <= lines).then_some(candidate)
+    };
+    // The most words that fit, found by halving (titles are a few dozen words at most).
+    let (mut low, mut high) = (0, words.len());
+    while low < high {
+        let middle = (low + high).div_ceil(2);
+        if fits(middle).is_some() {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    fits(low.max(1)).unwrap_or_else(|| format!("{}…", words.first().copied().unwrap_or("")))
+}
+
 /// Lettering over any wallpaper: white over a faint shade just below.
 fn lettering(out: &mut Scene, words: &str, rect: Rect, style: TextStyle, alpha: f32) {
     let shade = Rect::new(rect.x, rect.y + 2., rect.w, rect.h);
@@ -203,12 +230,13 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         text(30., 600, 0.),
         0.78,
     );
-    let title: String = title.chars().take(110).collect();
+    let style = text(44., 650, -0.01).leading(52. / 44.);
+    let title = fit_lines(assets, &title, style, 1500., 2);
     lettering(
         out,
         &title,
         Rect::new(LEFT, ROW_Y - 150., 1500., 112.),
-        text(44., 650, -0.01).leading(52. / 44.),
+        style,
         1.,
     );
     let _ = start;
@@ -252,6 +280,23 @@ mod tests {
         assert_eq!(
             clean_for("Why ETV Telugu changed its logo", "ETV Telugu").0,
             "Why ETV Telugu changed its logo"
+        );
+    }
+
+    #[test]
+    fn a_long_title_ends_at_a_word_with_an_ellipsis_in_two_lines() {
+        let assets = crate::tests::test_assets();
+        let style = text(44., 650, -0.01).leading(52. / 44.);
+        let long = "Kishan Reddy addresses a public meeting on the new railway line and the \
+                    irrigation projects promised to the farmers of the district this year";
+        let fitted = fit_lines(&assets, long, style, 1500., 2);
+        assert!(fitted.ends_with('…'));
+        assert!(long.starts_with(fitted.trim_end_matches('…')));
+        assert!(assets.lines(&fitted, style, 1500. * 0.92) <= 2);
+        // A title that fits is left whole.
+        assert_eq!(
+            fit_lines(&assets, "Morning news", style, 1500., 2),
+            "Morning news"
         );
     }
 

@@ -13,7 +13,7 @@ fn ready() -> State {
     state
 }
 
-fn test_assets() -> view::Assets {
+pub(crate) fn test_assets() -> view::Assets {
     view::Assets {
         root: PathBuf::new(),
         icons: BTreeMap::new(),
