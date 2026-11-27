@@ -2425,50 +2425,19 @@ fn youtube_pins_fill_the_shelf_up_from_youtube_and_play_their_newest_video() {
 }
 
 #[test]
-fn a_jiohotstar_show_pin_is_on_jiohotstar_s_shelf_and_opens_the_show() {
-    use crate::model::{App, Pin, PinKind};
-    use crate::pins_service::{Card, Response};
-    let mut state = ready();
-    let mut inventory = demo_inventory();
-    inventory
-        .apps
-        .insert(1, App::new(crate::hotstar::APP, "JioHotstar"));
-    state.set_inventory(inventory, None);
-    state.preferences.favorites = Some(vec![
-        crate::hotstar::APP.into(),
-        crate::state::YOUTUBE.into(),
-    ]);
-    let show = Pin {
-        kind: PinKind::Show,
-        id: "in/shows/bigg-boss/14714".into(),
-        title: "Bigg Boss Telugu".into(),
-        avatar: None,
-    };
-    state.preferences.pins.push(show.clone());
-    state.pins_response(Response::Shelf {
-        pin: show.key(),
-        cards: vec![Card {
-            video: show.id.clone(),
-            title: show.title.clone(),
-            published: String::new(),
-            image: None,
-        }],
-        avatar: None,
-    });
-    // On YouTube's shelf it is not; focused, JioHotstar shows it.
-    state.focus = Target::App(crate::state::YOUTUBE.into());
-    assert!(state.shelf_cards().is_empty());
-    state.focus = Target::App(crate::hotstar::APP.into());
-    assert!(state.shelf_visible());
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::Card(0));
-    assert_eq!(
-        state.activate(),
-        vec![Effect::Open(
-            crate::hotstar::APP.into(),
-            json!({ "contentTarget": "https://livingroom.hotstar.com/in/shows/bigg-boss/14714" })
-        )]
-    );
-    state.back();
-    assert_eq!(state.focus, Target::App(crate::hotstar::APP.into()));
+fn a_pin_this_version_cannot_read_drops_only_itself() {
+    let preferences: Preferences = serde_json::from_value(json!({
+        "pins": [
+            {"kind": "Channel", "id": "UCJi8M0hRKjz8SLPvJKEVTOg", "title": "ETV Andhra Pradesh"},
+            {"kind": "Show", "id": "in/shows/bigg-boss/14714", "title": "Bigg Boss Telugu"},
+            {"kind": "Channel", "id": "UCSzOZ97LOpU-_AVlGfmD4rQ", "title": "Bhakthi TV"}
+        ]
+    }))
+    .unwrap();
+    let titles: Vec<_> = preferences
+        .pins
+        .iter()
+        .map(|pin| pin.title.as_str())
+        .collect();
+    assert_eq!(titles, ["ETV Andhra Pradesh", "Bhakthi TV"]);
 }

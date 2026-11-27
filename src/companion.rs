@@ -311,9 +311,7 @@ fn serve(
             }
             body.truncate(length);
             let link = String::from_utf8_lossy(&body).trim().to_owned();
-            if crate::youtube::parse_link(&link).is_none()
-                && crate::hotstar::parse_show(&link).is_none()
-            {
+            if crate::youtube::parse_link(&link).is_none() {
                 let _ = respond_json(stream, "422 Unprocessable Content", false, "notYouTube");
                 return;
             }

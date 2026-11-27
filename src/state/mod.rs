@@ -233,7 +233,7 @@ pub enum Effect {
     Save,
     Refresh,
     Launch(String),
-    /// Open an app with launch parameters: a pinned YouTube video, a JioHotstar show.
+    /// Open an app with launch parameters: a pinned YouTube video.
     Open(String, serde_json::Value),
     /// Resolve a pasted link, or bring the pins' uploads up to date.
     Pins(crate::pins_service::Command),

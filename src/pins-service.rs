@@ -96,17 +96,8 @@ impl Client {
     }
 
     fn resolve(&self, text: &str) -> Result<Pin, String> {
-        // A JioHotstar show needs nothing fetched: its link is its pin.
-        if let Some(path) = crate::hotstar::parse_show(text) {
-            return Ok(Pin {
-                kind: PinKind::Show,
-                title: crate::hotstar::title_from_path(&path),
-                id: path,
-                avatar: None,
-            });
-        }
         let link = youtube::parse_link(text)
-            .ok_or("Paste a link to a YouTube channel, playlist or video, or a JioHotstar show.")?;
+            .ok_or("Paste a link to a YouTube channel, playlist or video.")?;
         Ok(match link {
             Link::Handle(handle) => {
                 let (id, title, avatar) = self.channel(&format!("@{handle}"))?;
@@ -205,13 +196,6 @@ impl Client {
 
     fn row(&self, pin: &Pin) -> Result<(Vec<Card>, Option<String>), String> {
         let cards = match pin.kind {
-            // Its own card: the show, opened on its page.
-            PinKind::Show => vec![Card {
-                video: pin.id.clone(),
-                title: pin.title.clone(),
-                published: String::new(),
-                image: None,
-            }],
             PinKind::Video => vec![Card {
                 video: pin.id.clone(),
                 title: pin.title.clone(),

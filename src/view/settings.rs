@@ -845,7 +845,6 @@ fn settings_list(out: &mut Scene, state: &State, assets: &Assets) {
                         crate::model::PinKind::Channel => i18n::t("pinChannel"),
                         crate::model::PinKind::Playlist => i18n::t("pinPlaylist"),
                         crate::model::PinKind::Video => i18n::t("pinVideo"),
-                        crate::model::PinKind::Show => i18n::t("pinShow"),
                     };
                     (pin.title.as_str(), Some(kind), false)
                 })
