@@ -2543,9 +2543,18 @@ fn a_pin_in_settings_moves_to_the_front_or_is_removed_cancel_focused() {
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(titles(&state), ["Bhakthi TV", "ETV Andhra Pradesh"]);
     assert_eq!(state.focus, Target::Choice(0));
-    // Remove takes it off; focus takes the row now in its place.
+    // Now first, it has no Move to Front (it would do nothing): Remove leads, Cancel focused.
     state.activate();
-    state.focus = Target::Alert(1);
+    assert_eq!(
+        state.unpin_choices(),
+        [
+            crate::state::UnpinChoice::Remove,
+            crate::state::UnpinChoice::Cancel
+        ]
+    );
+    assert_eq!(state.focus, Target::Alert(1));
+    // Remove takes it off; focus takes the row now in its place.
+    state.focus = Target::Alert(0);
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(titles(&state), ["ETV Andhra Pradesh"]);
     assert_eq!(state.focus, Target::Choice(0));

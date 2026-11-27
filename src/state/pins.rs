@@ -26,6 +26,15 @@ pub struct ShelfRow {
 /// while Home is used; past this, offline, the stream has likely ended and the badge would lie.
 const LIVE_HOLDS: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 
+/// What a pin's alert offers. The first pin is already at the front, so it has no Move to Front:
+/// a button that does nothing reads as broken.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UnpinChoice {
+    Front,
+    Remove,
+    Cancel,
+}
+
 /// A card on the shelf: a pin's newest upload (a video pin: itself).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShelfCard<'a> {
@@ -238,6 +247,28 @@ impl State {
     }
 
     /// Takes a pin off, its row with it.
+    /// The pin alert's buttons, top to bottom, for the pin it is open on.
+    pub fn unpin_choices(&self) -> &'static [UnpinChoice] {
+        let Some(Overlay::Unpin { key, .. }) = &self.overlay else {
+            return &[];
+        };
+        let first = self
+            .preferences
+            .pins
+            .first()
+            .is_some_and(|pin| &pin.key() == key);
+        if first {
+            &[UnpinChoice::Remove, UnpinChoice::Cancel]
+        } else {
+            &[UnpinChoice::Front, UnpinChoice::Remove, UnpinChoice::Cancel]
+        }
+    }
+
+    /// What the pin alert's button at `index` does, while that alert is open.
+    pub fn unpin_choice(&self, index: usize) -> Option<UnpinChoice> {
+        self.unpin_choices().get(index).copied()
+    }
+
     pub fn unpin(&mut self, key: &str) -> Vec<Effect> {
         let before = self.preferences.pins.len();
         self.preferences.pins.retain(|pin| pin.key() != key);

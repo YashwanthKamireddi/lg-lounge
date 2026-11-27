@@ -7,9 +7,9 @@ mod looks;
 mod navigation;
 mod phone;
 mod pins;
-pub use pins::ShelfRow;
 #[cfg(test)]
 pub use pins::{PINS_REFRESH, PINS_RETRY};
+pub use pins::{ShelfRow, UnpinChoice};
 mod rearrange;
 mod switcher;
 mod text;

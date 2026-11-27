@@ -7,7 +7,7 @@ use super::{
 use crate::{
     i18n,
     renderer::{Draw, WHITE},
-    state::{PhoneStep, Rect, State, Target},
+    state::{PhoneStep, Rect, State, Target, UnpinChoice},
 };
 
 /// The panel's width, and the inset of everything inside it.
@@ -53,7 +53,17 @@ pub(super) fn unpin(out: &mut Scene, state: &State, assets: &Assets, key: &str) 
         .iter()
         .find(|pin| pin.key() == key)
         .map_or("", |pin| pin.title.as_str());
-    let buttons = [i18n::t("moveToFront"), i18n::t("remove"), i18n::t("cancel")];
+    let choices = state.unpin_choices();
+    let buttons: Vec<&str> = choices
+        .iter()
+        .map(|choice| {
+            i18n::t(match choice {
+                UnpinChoice::Front => "moveToFront",
+                UnpinChoice::Remove => "remove",
+                UnpinChoice::Cancel => "cancel",
+            })
+        })
+        .collect();
     alert(
         out,
         state,
@@ -62,7 +72,9 @@ pub(super) fn unpin(out: &mut Scene, state: &State, assets: &Assets, key: &str) 
             title,
             message: i18n::t("pinMessage"),
             buttons: &buttons,
-            destructive: Some(1),
+            destructive: choices
+                .iter()
+                .position(|choice| *choice == UnpinChoice::Remove),
             figure: None,
         },
     );
