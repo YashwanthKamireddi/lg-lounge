@@ -16,8 +16,9 @@ use std::{
     time::Duration,
 };
 
-/// Each pin's newest this many uploads: a shelf row's worth.
-const PER_PIN: usize = 8;
+/// Each pin's newest upload is what the shelf shows; only its picture is fetched and scaled.
+/// (Eight per pin fetched and scaled 40 thumbnails a refresh for five on screen.)
+const PER_PIN: usize = 1;
 /// A card's picture: twice the shelf card, sharp on the 4K panel's 2x scale.
 const CARD: (u32, u32) = (768, 432);
 const AVATAR: u32 = 256;
@@ -170,7 +171,9 @@ impl Client {
         let image = reader
             .decode()
             .ok()?
-            .resize_to_fill(size.0, size.1, FilterType::Lanczos3)
+            // A plain downscale by under 2x: the triangle filter matches Lanczos to the eye at a
+            // fraction of its work on the TV's CPU.
+            .resize_to_fill(size.0, size.1, FilterType::Triangle)
             .to_rgb8();
         let partial = path.with_extension("partial");
         let file = fs::File::create(&partial).ok()?;
