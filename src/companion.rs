@@ -606,7 +606,7 @@ transition:transform .18s cubic-bezier(.2,.8,.2,1),opacity .2s ease}}
 <main>
 <h1>{title}</h1>
 <p class="hint">{hint}</p>
-<input id="link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtube.com/@…" aria-label="{title}">
+<input id="link" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtube.com/@…" aria-label="{title}">
 <button class="button" id="pin" disabled>{pin}</button>
 <p id="status" role="status" data-sent="{sent}" data-wrong="{wrong}" data-failed="{failed}"></p>
 </main>
@@ -645,6 +645,9 @@ pin.addEventListener('click', async () => {
         return;
       }
     }
+    // No answer in time (the TV asleep, or YouTube slow): never leave Pin stuck off.
+    status.textContent = status.dataset.failed;
+    pin.disabled = !link.value.trim();
   } catch (error) { status.textContent = status.dataset.failed; pin.disabled = false; }
 });
 "#;
