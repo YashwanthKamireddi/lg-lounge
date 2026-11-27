@@ -373,18 +373,13 @@ impl State {
                     return vec![];
                 }
             }
-            // Up from YouTube in the dock opens its shelf: the pins' newest uploads. A held Up
-            // stops at the dock, as everywhere.
+            // Up from a dock app with pins moves into its shelf. A held Up stops at the dock,
+            // as everywhere.
             if self.page == Page::Apps
                 && !self.held
                 && !self.expanded
+                && !self.shelf_open
                 && matches!(direction, Direction::Up)
-                && self.focus == Target::App(YOUTUBE.into())
-                && self
-                    .apps()
-                    .iter()
-                    .take(APPS_COLUMNS)
-                    .any(|app| app.id == YOUTUBE)
                 && self.open_shelf()
             {
                 return vec![];

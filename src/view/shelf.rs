@@ -92,8 +92,38 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         if lift > 0. {
             out.shadow(rect, TILE_RADIUS, 48., 30. * lift, 0.5 * lift);
         }
+        let show = shelf_card.pin.kind == crate::model::PinKind::Show;
         match &shelf_card.card.image {
             Some(image) => out.image(image.clone(), rect, TILE_RADIUS, false),
+            // A show has no thumbnail feed: its card is JioHotstar's own blue to violet, with
+            // the show's name across it.
+            None if show => {
+                out.draw.push(Draw::RoundedGradient(
+                    rect,
+                    TILE_RADIUS,
+                    c(0x1c4fe0, 1.),
+                    c(0x6a2bd9, 1.),
+                ));
+                out.text(
+                    shelf_card.pin.title.as_str(),
+                    Rect::new(
+                        rect.x + 24. * scale,
+                        rect.y + rect.h / 2. - 34. * scale,
+                        rect.w - 48. * scale,
+                        68. * scale,
+                    ),
+                    text(40., 650, -0.01).scaled(scale),
+                    c(0xffffff, 1.),
+                    true,
+                );
+                out.text(
+                    "JioHotstar",
+                    Rect::new(rect.x + 22. * scale, rect.y + 18. * scale, 300., 30.),
+                    text(20., 600, 0.02).scaled(scale),
+                    c(0xffffff, 0.8),
+                    false,
+                );
+            }
             // Its picture is still on its way: the card's place, quietly.
             None => out.shape(rect, TILE_RADIUS, c(0x2c2c2e, 0.9)),
         }
@@ -133,11 +163,19 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
     }
     // The focused card's video and channel, above the row.
     let shelf_card = &cards[focused];
-    let (title, _) = clean(&shelf_card.card.title);
-    let mut meta = shelf_card.pin.title.clone();
-    if let Some(ago) = ago(&shelf_card.card.published, now) {
-        meta = format!("{meta} · {ago}");
-    }
+    let (title, meta) = if shelf_card.pin.kind == crate::model::PinKind::Show {
+        (
+            shelf_card.pin.title.clone(),
+            crate::i18n::t("showLatest").to_owned(),
+        )
+    } else {
+        let (title, _) = clean(&shelf_card.card.title);
+        let mut meta = shelf_card.pin.title.clone();
+        if let Some(ago) = ago(&shelf_card.card.published, now) {
+            meta = format!("{meta} · {ago}");
+        }
+        (title, meta)
+    };
     lettering(
         out,
         &meta,

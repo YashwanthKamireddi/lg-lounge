@@ -23,11 +23,31 @@ pub struct ShelfCard<'a> {
 }
 
 impl State {
-    /// The shelf, in pin order: each pin with an upload fetched shows its newest.
+    /// The dock app the shelf is about: the one it was opened from, or the focused one.
+    pub fn shelf_app(&self) -> Option<&str> {
+        if self.shelf_open {
+            return self.shelf_owner.as_deref();
+        }
+        let Target::App(id) = &self.focus else {
+            return None;
+        };
+        self.apps()
+            .iter()
+            .take(APPS_COLUMNS)
+            .any(|app| &app.id == id)
+            .then_some(id.as_str())
+    }
+
+    /// The shelf, in pin order: the shelf app's pins, each with its newest upload (a show: its
+    /// own card).
     pub fn shelf_cards(&self) -> Vec<ShelfCard<'_>> {
+        let Some(app) = self.shelf_app() else {
+            return vec![];
+        };
         self.preferences
             .pins
             .iter()
+            .filter(|pin| pin.app() == app)
             .filter_map(|pin| {
                 let row = self.shelf.get(&pin.key())?;
                 Some(ShelfCard {
@@ -39,20 +59,11 @@ impl State {
             .collect()
     }
 
-    /// The shelf shows whenever YouTube is focused in the dock, as Apple TV's Top Shelf shows
+    /// The shelf shows whenever a dock app with pins is focused, as Apple TV's Top Shelf shows
     /// an app's content the moment it is focused: nobody has to know to press Up for it. Up
     /// then moves into its cards.
     pub fn shelf_visible(&self) -> bool {
-        self.page == Page::Apps
-            && !self.expanded
-            && (self.shelf_open
-                || (self.focus == Target::App(YOUTUBE.into())
-                    && self
-                        .apps()
-                        .iter()
-                        .take(APPS_COLUMNS)
-                        .any(|app| app.id == YOUTUBE)))
-            && !self.shelf_cards().is_empty()
+        self.page == Page::Apps && !self.expanded && !self.shelf_cards().is_empty()
     }
 
     /// Notes the shelf appearing or leaving, for the crossfade with the clock (once a frame).
@@ -78,21 +89,22 @@ impl State {
         }
     }
 
-    /// Up from YouTube in the dock: the shelf, on its first card.
+    /// Up from a dock app with pins: its shelf, on the first card.
     pub(super) fn open_shelf(&mut self) -> bool {
         if self.shelf_cards().is_empty() {
             return false;
         }
+        self.shelf_owner = self.shelf_app().map(str::to_owned);
         self.shelf_open = true;
         self.focus = Target::Card(0);
         self.dirty = true;
         true
     }
 
-    /// Down or Back from the shelf: YouTube in the dock again.
+    /// Down or Back from the shelf: its app in the dock again.
     pub(super) fn close_shelf(&mut self) {
         self.shelf_open = false;
-        self.focus = Target::App(YOUTUBE.into());
+        self.focus = Target::App(self.shelf_owner.take().unwrap_or_else(|| YOUTUBE.into()));
         self.dirty = true;
     }
 
@@ -153,6 +165,18 @@ impl State {
                 ]
             }
         }
+    }
+
+    /// What OK on a shelf card opens: a YouTube video, or a JioHotstar show's page.
+    pub(super) fn open_card(&self, index: usize) -> Vec<Effect> {
+        let Some(card) = self.shelf_cards().get(index).cloned() else {
+            return vec![];
+        };
+        let params = match card.pin.kind {
+            crate::model::PinKind::Show => crate::hotstar::launch_params(&card.pin.id),
+            _ => crate::youtube::launch_params(&card.card.video),
+        };
+        vec![Effect::Open(card.pin.app().into(), params)]
     }
 
     /// Takes a pin off, its row with it.
