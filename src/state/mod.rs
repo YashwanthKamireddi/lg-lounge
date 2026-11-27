@@ -1068,7 +1068,7 @@ impl State {
             icon: None,
             removable: false,
         };
-        // Search and the inputs are buttons in the bar above the dock (Up reaches them), so the
+        // The inputs are in the Inputs panel in the pill (Up from the dock reaches it), so the
         // grid holds apps and Lounge's Settings only.
         self.inventory
             .apps

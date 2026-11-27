@@ -104,7 +104,7 @@ impl Font {
             outline.builder.end(true);
         }
         // Flatten to within 0.15 px at 64 px/em: at most 0.21 px off the true
-        // curve for the largest text (the 90 px greeting) on the 1080p plane
+        // curve for the largest text (the big clock's figures) on the 1080p plane
         // and 0.42 px in a 4K capture, where it differed from the previous
         // 256 px/em geometry only in single anti-aliased edge pixels (no
         // visible change at 6x zoom). It cut glyphs from 506 to 323 vertices

@@ -48,8 +48,8 @@ impl State {
     /// The visible Home favourite at `slot`, opened directly.
     /// The remote's number keys open the apps in the order the grid shows
     /// them (hidden ones and LG's Home Dashboard never count). Lounge's own
-    /// Settings and Search tiles are not apps webOS can open, so they are
-    /// skipped rather than launched.
+    /// Settings tile is not an app webOS can open, so it is skipped rather
+    /// than launched.
     pub fn quick_launch(&mut self, slot: usize) -> Vec<Effect> {
         self.apps()
             .into_iter()
