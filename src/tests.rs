@@ -2647,3 +2647,23 @@ fn the_shelf_s_pictures_stay_on_the_gpu_while_the_grid_covers_them() {
     assert!(kept.contains(&"/cache/kJqrDRnWA9s.jpg".to_owned()));
     assert!(kept.contains(&"/cache/avatar-UCJi8M0hRKjz8SLPvJKEVTOg.jpg".to_owned()));
 }
+
+#[test]
+fn pins_are_not_refreshed_for_nobody_and_are_at_the_next_press() {
+    use crate::model::{Pin, PinKind};
+    let mut state = ready();
+    state.preferences.pins.push(Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    });
+    // Nobody has pressed anything for an hour, and the last refresh is long past.
+    let long_ago = crate::clock::now().checked_sub(std::time::Duration::from_secs(3600));
+    state.last_input = long_ago;
+    state.pins_refreshed = long_ago;
+    assert!(state.pins_due(true).is_none());
+    // A press: refreshed at once.
+    state.touched();
+    assert!(state.pins_due(true).is_some());
+}

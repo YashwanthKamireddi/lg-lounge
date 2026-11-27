@@ -113,6 +113,7 @@ impl Remote {
         state: &mut State,
         controls: &[Control],
     ) -> Vec<Effect> {
+        state.touched();
         // Whatever is pressed next supersedes a switcher still being asked for.
         state.switcher_asked = false;
         let Some(front) = front else {
@@ -243,6 +244,7 @@ impl Remote {
         front: Option<u64>,
         state: &mut State,
     ) {
+        state.touched();
         if front.is_none() || state.moving.is_some() {
             return;
         }
@@ -269,6 +271,7 @@ impl Remote {
         front: Option<u64>,
         state: &mut State,
     ) {
+        state.touched();
         state.switcher_asked = false;
         let Some(front) = front else {
             self.press = None;

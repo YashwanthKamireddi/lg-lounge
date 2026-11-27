@@ -85,8 +85,8 @@ its thumbnail, the channel's picture and a badge while it is live; OK plays it a
 the YouTube app's own `contentTarget` launch parameter.
 
 - **No account.** A worker reads YouTube's public Atom feeds and channel pages; nothing is
-  signed in and no API key is involved. It refreshes while Home is on screen and never behind an
-  app, and keeps the thumbnails on the TV, dropping those no pin shows any more.
+  signed in and no API key is involved. It refreshes while Home is on screen and someone is
+  using the remote, never behind an app or overnight under the screen saver, and keeps the thumbnails on the TV, dropping those no pin shows any more.
 - **Pinning.** A link pasted on the phone (the same QR page as photos) is resolved on the TV:
   a handle to its channel, a video to its title. Pins are removed in Settings.
 

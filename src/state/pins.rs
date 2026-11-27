@@ -9,6 +9,9 @@ pub const PINS_REFRESH: Duration = Duration::from_secs(15 * 60);
 /// After a refresh that could not reach YouTube: soon again. Waking, the TV takes a few seconds
 /// to join the network, and the first refresh came too early; the next was 15 minutes away.
 pub const PINS_RETRY: Duration = Duration::from_secs(30);
+/// With nobody pressing anything for this long (asleep under the screen saver, say), the pins
+/// are not refreshed: no one sees them. The next press refreshes them at once.
+pub const PINS_IDLE: Duration = Duration::from_secs(30 * 60);
 
 /// One pin's row: its latest uploads, newest first, and its channel's picture on the TV.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -140,6 +143,12 @@ impl State {
             return None;
         }
         if self
+            .last_input
+            .is_some_and(|at| crate::clock::since(at) >= PINS_IDLE)
+        {
+            return None;
+        }
+        if self
             .pins_refreshed
             .is_some_and(|at| crate::clock::since(at) < PINS_REFRESH)
         {
@@ -204,6 +213,11 @@ impl State {
         };
         let params = crate::youtube::launch_params(&card.card.video);
         vec![Effect::Open(card.pin.app().into(), params)]
+    }
+
+    /// The remote or the pointer was used.
+    pub fn touched(&mut self) {
+        self.last_input = Some(crate::clock::now());
     }
 
     /// Takes a pin off, its row with it.
