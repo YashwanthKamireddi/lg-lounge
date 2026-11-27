@@ -92,8 +92,8 @@ the YouTube app's own `contentTarget` launch parameter.
 
 ## Text in every script
 
-Interface text is drawn from vector outlines in SF Pro or Inter. Telugu and Devanagari, which
-those fonts do not cover, are shaped with rustybuzz (a Rust port of HarfBuzz) in Noto Sans, so
+Interface text is drawn from vector outlines in SF Pro or Inter. Telugu, Devanagari, Tamil,
+Kannada, Malayalam and Bengali, which those fonts do not cover, are shaped with rustybuzz (a Rust port of HarfBuzz) in Noto Sans, so
 conjuncts and vowel signs are placed as the script requires: channel names and video titles read
 as they should.
 

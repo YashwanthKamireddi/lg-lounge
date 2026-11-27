@@ -14,6 +14,10 @@ pub(super) const CLOCK_FONT: u16 = 3000;
 /// Scripts the interface's font does not draw, each in its Noto cut, shaped (rustybuzz).
 const TELUGU_FONT: u16 = 3001;
 const DEVANAGARI_FONT: u16 = 3002;
+const TAMIL_FONT: u16 = 3003;
+const KANNADA_FONT: u16 = 3004;
+const MALAYALAM_FONT: u16 = 3005;
+const BENGALI_FONT: u16 = 3006;
 /// Shaped glyphs are cached by id under these private-use characters.
 const SHAPED_BASE: u32 = 0xF0000;
 
@@ -22,6 +26,10 @@ fn script_font(c: char) -> Option<u16> {
     match c as u32 {
         0x0C00..=0x0C7F => Some(TELUGU_FONT),
         0x0900..=0x097F | 0xA8E0..=0xA8FF => Some(DEVANAGARI_FONT),
+        0x0B80..=0x0BFF => Some(TAMIL_FONT),
+        0x0C80..=0x0CFF => Some(KANNADA_FONT),
+        0x0D00..=0x0D7F => Some(MALAYALAM_FONT),
+        0x0980..=0x09FF => Some(BENGALI_FONT),
         _ => None,
     }
 }
@@ -54,6 +62,14 @@ pub(super) fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
         "font-telugu.ttf".to_owned()
     } else if id == DEVANAGARI_FONT {
         "font-devanagari.ttf".to_owned()
+    } else if let Some(script) = match id {
+        TAMIL_FONT => Some("tamil"),
+        KANNADA_FONT => Some("kannada"),
+        MALAYALAM_FONT => Some("malayalam"),
+        BENGALI_FONT => Some("bengali"),
+        _ => None,
+    } {
+        format!("font-{script}.ttf")
     } else if id >= 1000 {
         format!("font-display-{}.ttf", id - 1000)
     } else {

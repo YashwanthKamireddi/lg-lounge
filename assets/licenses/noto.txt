@@ -1,5 +1,8 @@
-Noto Sans Telugu and Noto Sans Devanagari
-Copyright 2022 The Noto Project Authors (https://github.com/notofonts/telugu, https://github.com/notofonts/devanagari)
+Noto Sans Telugu, Devanagari, Tamil, Kannada, Malayalam and Bengali
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/telugu,
+https://github.com/notofonts/devanagari, https://github.com/notofonts/tamil,
+https://github.com/notofonts/kannada, https://github.com/notofonts/malayalam,
+https://github.com/notofonts/bengali)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
