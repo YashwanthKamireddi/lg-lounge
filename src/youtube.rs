@@ -223,6 +223,11 @@ pub fn page_live_now(page: &str) -> bool {
     page.contains("\"isLiveNow\":true")
 }
 
+/// A stream that is over: not live now, and not waiting to start. It never goes live again.
+pub fn page_ended(page: &str) -> bool {
+    !page_live_now(page) && !page.contains("\"isUpcoming\":true")
+}
+
 /// A channel page's id, name and avatar (its `og:` tags and `externalId`), for a pin made from
 /// a handle.
 pub fn parse_channel_page(html: &str) -> Option<(String, String, Option<String>)> {
@@ -344,6 +349,10 @@ mod tests {
         assert!(page_live_now(
             r#"..."isLiveContent":true,..."isLiveNow":true..."#
         ));
+        // Over: not asked again. Live or still to start: asked again next time.
+        assert!(page_ended(r#""isLiveContent":true,"isLiveNow":false"#));
+        assert!(!page_ended(r#""isLiveNow":true"#));
+        assert!(!page_ended(r#""isLiveNow":false,"isUpcoming":true"#));
     }
 
     #[test]

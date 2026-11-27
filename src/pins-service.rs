@@ -59,6 +59,9 @@ pub enum Response {
 struct Client {
     agent: ureq::Agent,
     cache: PathBuf,
+    /// Streams found over: one never goes live again, so its page is not asked again (each is a
+    /// megabyte or more, and news titles nearly all say LIVE).
+    ended: std::cell::RefCell<HashSet<String>>,
 }
 
 impl Client {
@@ -205,14 +208,24 @@ impl Client {
     /// Whether a video is streaming now: its watch page's `isLiveNow`. Asked only of a video
     /// whose title claims it, a few a refresh.
     fn live_now(&self, video: &str, title: &str) -> bool {
-        if !youtube::claims_live(title) {
+        if !youtube::claims_live(title) || self.ended.borrow().contains(video) {
             return false;
         }
-        self.text(
+        let Ok(page) = self.text(
             &format!("https://www.youtube.com/watch?v={video}"),
             4 * 1024 * 1024,
-        )
-        .is_ok_and(|page| youtube::page_live_now(&page))
+        ) else {
+            return false;
+        };
+        if youtube::page_ended(&page) {
+            let mut ended = self.ended.borrow_mut();
+            // A long session's worth at most.
+            if ended.len() >= 512 {
+                ended.clear();
+            }
+            ended.insert(video.to_owned());
+        }
+        youtube::page_live_now(&page)
     }
 
     fn row(&self, pin: &Pin) -> Result<(Vec<Card>, Option<String>), String> {
@@ -279,6 +292,7 @@ impl Service {
                     .build()
                     .new_agent(),
                 cache,
+                ended: Default::default(),
             };
             while let Ok(mut job) = jobs.recv() {
                 // Refreshes asked for meanwhile collapse into the newest.
