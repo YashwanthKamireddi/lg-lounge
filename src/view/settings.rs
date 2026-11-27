@@ -740,7 +740,24 @@ fn about(out: &mut Scene, state: &State, assets: &Assets, section: Option<usize>
         return;
     }
     let (about, glyph) = match section {
+        // A page reached from a row says what that row does, not what its section holds.
         Some(GENERAL_SECTION) if state.subpage == Some(Subpage::Hidden) => ("aboutHidden", "gear"),
+        Some(_) if state.subpage == Some(Subpage::Clock) => ("aboutClockFormat", "clock"),
+        Some(_) if state.subpage == Some(Subpage::BigClock) => ("aboutBigClock", "clock"),
+        Some(_) if state.subpage == Some(Subpage::Saver) => ("aboutSaver", "moon"),
+        Some(_) if state.subpage == Some(Subpage::Pins) => (
+            if state.preferences.pins.is_empty() {
+                "aboutPinsEmpty"
+            } else {
+                "aboutPins"
+            },
+            "tv-bold",
+        ),
+        Some(_) if state.subpage == Some(Subpage::Appearance) => ("aboutAppearance", "sparkles"),
+        Some(_) if state.subpage == Some(Subpage::Temperature) => {
+            ("aboutTemperature", "thermometer")
+        }
+        Some(_) if state.subpage == Some(Subpage::WeatherLocation) => ("aboutWeather", "location"),
         None => ("aboutSettings", "tv-bold"),
         // Says only what the page lists: Lounge as Home and Hidden apps come and go.
         Some(GENERAL_SECTION) => {
@@ -764,7 +781,7 @@ fn about(out: &mut Scene, state: &State, assets: &Assets, section: Option<usize>
         ),
         Some(ACCESS_SECTION) => ("aboutAccessibility", "eye-bold"),
         Some(BACKGROUND_SECTION) => ("aboutBackground", ""),
-        Some(_) => ("aboutWeather", "weather-partly-cloudy"),
+        Some(_) => ("aboutWeatherSection", "weather-partly-cloudy"),
     };
     if glyph.is_empty() {
         let frame = Rect::new(110., 310., 640., 360.);

@@ -2684,3 +2684,27 @@ fn the_general_caption_names_only_the_rows_the_page_lists() {
     assert!(caption(&state).contains("apps you've hidden"));
     assert!(!caption(&state).contains("TV's Home"));
 }
+
+#[test]
+fn a_settings_page_reached_from_a_row_explains_that_row() {
+    let mut state = ready();
+    state.page = Page::Settings;
+    state.section = crate::state::HOME_SECTION;
+    let caption = |state: &State| ui_text(state).join(" ");
+    let mut seen = std::collections::HashSet::new();
+    for page in [
+        crate::state::Subpage::BigClock,
+        crate::state::Subpage::Saver,
+        crate::state::Subpage::Pins,
+        crate::state::Subpage::Appearance,
+    ] {
+        state.subpage = Some(page.clone());
+        let text = caption(&state);
+        // Never the section's own summary, and different on each page.
+        assert!(!text.contains("How Home looks"), "{page:?}: {text}");
+        assert!(seen.insert(text), "{page:?} repeats another page's caption");
+    }
+    // The pins page only offers moving and removing once something is pinned.
+    state.subpage = Some(crate::state::Subpage::Pins);
+    assert!(!caption(&state).contains("remove"));
+}
