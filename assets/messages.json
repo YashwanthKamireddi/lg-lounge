@@ -12,6 +12,7 @@
   "weather": "Weather",
   "location": "Location",
   "locationNeeded": "Choose a place to see the weather on Home",
+  "liveNow": "Live now",
   "notSet": "Not set",
   "showAppNames": "Show app names",
   "clockFormat": "Clock format",
