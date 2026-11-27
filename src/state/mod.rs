@@ -937,6 +937,8 @@ impl State {
             && !self.expanded
             && self.overlay.is_none()
             && self.shown_scroll < GRID_SCROLL * 0.5
+            // Behind the shelf the face is gone (fully, once their crossfade ends): no frames.
+            && self.shelf_shown() < 1.
     }
 
     pub fn quiet_for(&self) -> Option<Duration> {
