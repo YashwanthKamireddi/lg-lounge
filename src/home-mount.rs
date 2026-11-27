@@ -1209,6 +1209,8 @@ impl<S: System> Home<S> {
             if root.is_some() {
                 self.unmount(SAVER_TARGET, saver_ours)?;
             }
+            // What Lounge wrote for it (src/main.rs, `saver_tick`) goes with it.
+            self.system.unlink("/var/lib/lounge/saver.json")?;
             return self.system.unlink(SAVER);
         };
         // A webOS without a QML screen saver keeps its own.

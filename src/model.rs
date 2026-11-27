@@ -167,6 +167,31 @@ pub enum Appearance {
     Auto,
 }
 
+/// The TV's screen saver while Lounge is Home (tv/screensaver.qml).
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub enum SaverFace {
+    /// Home's squircle face, every hour numbered.
+    #[default]
+    Analog,
+    /// The Lock Screen's tall figures under the date.
+    Digital,
+    /// The time over date and weather panels.
+    Modular,
+    /// The quarters in tall figures around fine hands.
+    Numerals,
+}
+
+impl SaverFace {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Analog => "analog",
+            Self::Digital => "digital",
+            Self::Modular => "modular",
+            Self::Numerals => "numerals",
+        }
+    }
+}
+
 /// The most pins kept: two rows of the shelf.
 pub const MAX_PINS: usize = 24;
 
@@ -257,6 +282,8 @@ pub struct Preferences {
     /// YouTube channels, playlists and videos pinned from the phone, in order.
     #[serde(deserialize_with = "lenient_pins")]
     pub pins: Vec<Pin>,
+    #[serde(deserialize_with = "lenient")]
+    pub saver: SaverFace,
 }
 
 /// A value this Lounge does not know (written by a newer or older one) falls
@@ -312,6 +339,7 @@ impl Default for Preferences {
             appearance: Appearance::Dark,
             clock: ClockStyle::Digital,
             pins: Vec::new(),
+            saver: SaverFace::Analog,
         }
     }
 }

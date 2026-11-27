@@ -633,6 +633,7 @@ fn run() -> Result<(), String> {
         weather_service,
         phone,
         pins_service,
+        saver_written: None,
         storage,
         platform,
         snapshots,
@@ -693,6 +694,8 @@ struct Shell {
     phone: companion::Service,
     /// YouTube pins: links resolved and the shelf's uploads kept fresh (pins_service).
     pins_service: pins_service::Service,
+    /// What was last written for the screen saver (`saver_tick`).
+    saver_written: Option<String>,
     /// The folder beside the preferences.
     storage: PathBuf,
     platform: Platform,
@@ -822,6 +825,7 @@ impl Shell {
         }
         self.phone_tick();
         self.pins_tick();
+        self.saver_tick();
         if let Some(pictures) = &self.avatars {
             match pictures.try_recv() {
                 Ok(pictures) => {
@@ -1525,6 +1529,26 @@ impl Shell {
             self.state.dirty = false;
         }
         Ok(())
+    }
+
+    /// As Home, what the screen saver reads as it starts (its face, the clock format, the
+    /// weather) is written beside its copy whenever it changes, off this thread.
+    fn saver_tick(&mut self) {
+        if !self.webos || !platform::is_home() {
+            return;
+        }
+        let settings = self.state.saver_settings();
+        if self.saver_written.as_deref() == Some(settings.as_str()) {
+            return;
+        }
+        self.saver_written = Some(settings.clone());
+        std::thread::spawn(move || {
+            let path = std::path::Path::new("/var/lib/lounge/saver.json");
+            let partial = path.with_extension("json.partial");
+            if std::fs::write(&partial, settings).is_ok() {
+                let _ = std::fs::rename(&partial, path);
+            }
+        });
     }
 
     /// The YouTube pins: a refresh when one is due, and what the worker answered.

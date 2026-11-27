@@ -2441,3 +2441,26 @@ fn a_pin_this_version_cannot_read_drops_only_itself() {
         .collect();
     assert_eq!(titles, ["ETV Andhra Pradesh", "Bhakthi TV"]);
 }
+
+#[test]
+fn the_screen_saver_face_is_chosen_in_settings_and_written_for_the_saver() {
+    let mut state = ready();
+    let read = |state: &State| -> serde_json::Value {
+        serde_json::from_str(&state.saver_settings()).unwrap()
+    };
+    assert_eq!(read(&state)["face"], "analog");
+    // Settings › Home › Screen saver › Modular.
+    state.open(2);
+    state.section = crate::state::HOME_SECTION;
+    state.focus = Target::Setting(15);
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(0));
+    state.focus = Target::Choice(2);
+    state.activate();
+    assert_eq!(state.preferences.saver, crate::model::SaverFace::Modular);
+    let written = read(&state);
+    assert_eq!(written["face"], "modular");
+    assert_eq!(written["hour24"], state.hour_24);
+    // No weather place: no weather words, never stale ones.
+    assert_eq!(written["weather"], "");
+}

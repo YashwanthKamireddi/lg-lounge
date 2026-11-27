@@ -186,6 +186,18 @@ impl State {
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
+                    15 => {
+                        self.subpage = Some(Subpage::Saver);
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(crate::clock::now());
+                        }
+                        let index = SAVER_FACES
+                            .iter()
+                            .position(|face| *face == self.preferences.saver)
+                            .unwrap_or(0);
+                        self.focus = Target::Choice(index);
+                        return vec![];
+                    }
                     14 => {
                         self.subpage = Some(Subpage::Pins);
                         if !self.preferences.reduced_motion {
@@ -295,6 +307,9 @@ impl State {
                     }
                     Some(Subpage::BigClock) => {
                         self.preferences.clock = CLOCK_STYLES[index.min(CLOCK_STYLES.len() - 1)];
+                    }
+                    Some(Subpage::Saver) => {
+                        self.preferences.saver = SAVER_FACES[index.min(SAVER_FACES.len() - 1)];
                     }
                     // A pin's row takes it off; the row after the pins adds one from the phone.
                     Some(Subpage::Pins) => {

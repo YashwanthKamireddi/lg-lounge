@@ -56,6 +56,14 @@ if len(sys.argv) > 2:
     subsetter.populate(text="0123456789: ")
     subsetter.subset(clock)
     clock = instantiateVariableFont(clock, {"wdth": 46, "wght": 620, "opsz": 28})
+    # A family of its own: the screen saver's Qt picks fonts by family name, and under SF Pro's
+    # it took the regular width (tv/screensaver.qml).
+    for record in list(clock["name"].names):
+        if record.nameID in (1, 4, 6, 16, 17):
+            clock["name"].removeNames(nameID=record.nameID)
+    for name_id, value in ((1, "Lounge Clock"), (4, "Lounge Clock"), (6, "LoungeClock")):
+        clock["name"].setName(value, name_id, 3, 1, 0x409)
+        clock["name"].setName(value, name_id, 1, 0, 0)
     clock.save(directory / "font-clock.ttf")
 else:
     (directory / "font-clock.ttf").write_bytes((directory / "font-display-500.ttf").read_bytes())
