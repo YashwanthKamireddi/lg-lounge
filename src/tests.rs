@@ -2464,3 +2464,24 @@ fn the_screen_saver_face_is_chosen_in_settings_and_written_for_the_saver() {
     // No weather place: no weather words, never stale ones.
     assert_eq!(written["weather"], "");
 }
+
+#[test]
+fn an_unreachable_refresh_is_tried_again_soon_not_in_a_quarter_hour() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::Response;
+    let mut state = ready();
+    state.preferences.pins.push(Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    });
+    assert!(state.pins_due(true).is_some());
+    assert!(state.pins_due(true).is_none());
+    state.pins_response(Response::Unreachable);
+    let waited = crate::state::PINS_REFRESH - crate::state::PINS_RETRY;
+    let since = crate::clock::since(state.pins_refreshed.unwrap());
+    assert!(since >= waited && since < waited + std::time::Duration::from_secs(1));
+    // Behind an app nothing is fetched, due or not.
+    assert!(state.pins_due(false).is_none());
+}
