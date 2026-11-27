@@ -6,6 +6,9 @@ use crate::pins_service::{Card, Command, Response};
 /// How often the uploads are checked while Home is on screen: news channels post through the
 /// day, and an hour-old "latest" would not be.
 pub const PINS_REFRESH: Duration = Duration::from_secs(15 * 60);
+/// After a refresh that could not reach YouTube: soon again. Waking, the TV takes a few seconds
+/// to join the network, and the first refresh came too early; the next was 15 minutes away.
+pub const PINS_RETRY: Duration = Duration::from_secs(30);
 
 /// One pin's row: its latest uploads, newest first, and its channel's picture on the TV.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -129,6 +132,11 @@ impl State {
     /// What the pins' worker answered.
     pub fn pins_response(&mut self, response: Response) -> Vec<Effect> {
         match response {
+            // Due again after `PINS_RETRY` instead of `PINS_REFRESH`.
+            Response::Unreachable => {
+                self.pins_refreshed = crate::clock::now().checked_sub(PINS_REFRESH - PINS_RETRY);
+                vec![]
+            }
             Response::Shelf { pin, cards, avatar } => {
                 // A row for a pin removed meanwhile is dropped.
                 if self.preferences.pins.iter().any(|kept| kept.key() == pin) {

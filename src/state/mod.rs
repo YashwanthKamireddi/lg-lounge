@@ -8,6 +8,8 @@ mod navigation;
 mod phone;
 mod pins;
 pub use pins::ShelfRow;
+#[cfg(test)]
+pub use pins::{PINS_REFRESH, PINS_RETRY};
 mod rearrange;
 mod switcher;
 mod text;

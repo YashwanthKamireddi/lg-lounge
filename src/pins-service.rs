@@ -43,6 +43,8 @@ pub struct Card {
 
 pub enum Response {
     Resolved(Result<Pin, String>),
+    /// A refresh could not reach YouTube for every pin (no network yet, say): try again soon.
+    Unreachable,
     /// A pin's latest uploads (a video pin: itself), and its channel's picture.
     Shelf {
         pin: String,
@@ -307,6 +309,9 @@ impl Service {
                                         let _ = fs::remove_file(entry.path());
                                     }
                                 }
+                            }
+                            if sent.is_ok() && failed {
+                                sent = crate::wake::sent(sender.send(Response::Unreachable));
                             }
                             sent
                         }
