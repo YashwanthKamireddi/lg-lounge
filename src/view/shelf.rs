@@ -81,6 +81,24 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         }
         _ => first_for(focused),
     };
+    // A soft shade under the shelf, as tvOS lays one under content over artwork: white
+    // lettering stays legible over a bright wallpaper or Top Shelf picture. Clear at the top,
+    // deepest behind the cards.
+    // Two bands: rising to its depth above the lettering, then holding behind the lettering
+    // and the cards (one ramp left the small line on top nearly bare).
+    let text_top = ROW_Y - 210.;
+    out.draw.push(Draw::RoundedGradient(
+        Rect::new(0., text_top - 200., 1920., 200.),
+        0.,
+        c(0x000000, 0.),
+        c(0x000000, 0.42),
+    ));
+    out.draw.push(Draw::RoundedGradient(
+        Rect::new(0., text_top, 1920., ROW_Y + CARD_H + 70. - text_top),
+        0.,
+        c(0x000000, 0.42),
+        c(0x000000, 0.52),
+    ));
     let start = out.draw.len();
     for (index, shelf_card) in cards.iter().enumerate() {
         let x = LEFT + (index as f32 - first) * (CARD_W + GAP);
