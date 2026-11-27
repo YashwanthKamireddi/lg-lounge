@@ -3,7 +3,7 @@
 use super::{
     Assets, Scene,
     glass::home_backdrop,
-    shared::{PLATTER, c, detail_style, text},
+    shared::{PLATTER, c, text},
 };
 use crate::{
     i18n,
@@ -437,58 +437,62 @@ pub(super) fn inputs_panel(out: &mut Scene, state: &State, assets: &Assets) {
     }
 }
 
-fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32) {
-    out.border(Rect::new(x, y, w, 30.), 7., 1.5, c(0xffffff, 0.3));
-    out.text(
-        label,
-        Rect::new(x, y + 6., w, 20.),
-        text(16., 600, 0.),
-        c(0xffffff, 0.7),
-        true,
-    );
+/// Where a capsule row of height `h` sits against a lifted tile: below it in the grid, above it
+/// when that would run past the bottom safe area (the dock). Returns its centre x and top y.
+fn beside_tile(tile: Rect, h: f32) -> (f32, f32) {
+    // Clear of the tile's focus lift, and of the dock's glass edge.
+    let overhang = tile.h * super::FOCUS_SCALE / 2.;
+    let below = tile.y + tile.h + overhang + 22.;
+    (
+        tile.x + tile.w / 2.,
+        if below + h <= 1020. {
+            below
+        } else {
+            tile.y - overhang - 44. - h
+        },
+    )
 }
 
-pub(super) fn footer(out: &mut Scene, state: &State, assets: &Assets) {
-    // tvOS shows no hint bars: not on the home screen, in Move, or Settings.
-    if matches!(state.page, Page::Apps | Page::Settings) {
+/// Move: what the arrows do now, beside the app in hand, where its menu was a moment ago. A
+/// lifted tile alone looked like plain focus, and arrows pressed in Move by mistake reordered
+/// the apps with nothing on screen saying so.
+pub(super) fn move_hint(out: &mut Scene, state: &State, assets: &Assets) {
+    const H: f32 = 58.;
+    const PAD: f32 = 26.;
+    let Some(id) = &state.moving else {
         return;
-    }
-    // Discoverability hints for beginners, at tvOS caption size and inside the
-    // 60pt bottom safe area that overscanning TVs can crop.
-    let style = detail_style();
-    let color = c(0xffffff, 0.5);
-    let y = 984.;
-    let mut x = 84.;
-    let mut hint = |out: &mut Scene, key: &str, key_width: f32, label: &str| {
-        keycap(out, key, x, y, key_width);
-        x += key_width + 12.;
-        out.text(label, Rect::new(x, y, 400., 30.), style, color, false);
-        x += assets.width(label, style) + 36.;
     };
-    if state.moving.is_some() {
-        hint(out, "← →", 56., i18n::t("move"));
-        hint(out, "OK", 40., i18n::t("done"));
-    } else if state.page == Page::Settings {
-        hint(out, "OK", 40., i18n::t("select"));
-        hint(out, "Back", 62., i18n::t("homeLabel"));
-        out.text(
-            format!("v{}", assets.version.trim()),
-            Rect::new(1636., y, 200., 30.),
-            style.right(),
-            c(0xffffff, 0.4),
-            false,
-        );
-    } else {
-        hint(out, "OK", 40., i18n::t("open"));
-        // The translated hint already names the gesture ("Hold OK for options").
-        out.text(
-            i18n::t("options"),
-            Rect::new(x, y, 600., 30.),
-            style,
-            color,
-            false,
-        );
-    }
+    let Some(tile) = out
+        .controls
+        .iter()
+        .find(|control| control.target == Target::App(id.clone()))
+        .map(|control| control.rect)
+    else {
+        return;
+    };
+    let label = i18n::t("moveHint");
+    let style = text(24., 600, 0.);
+    let width = PAD + assets.width(label, style) + PAD;
+    let (centre, y) = beside_tile(tile, H);
+    let pill = Rect::new((centre - width / 2.).clamp(80., 1840. - width), y, width, H);
+    let radius = H / 2.;
+    out.shadow(pill, radius, 24., 8., 0.28);
+    out.draw.push(Draw::Soft(Some(SOFT_EDGE)));
+    out.glass_over(
+        home_backdrop(state, assets),
+        pill,
+        radius,
+        out.theme.veil(0.34),
+    );
+    out.draw.push(Draw::Soft(None));
+    out.rim(pill, radius, 0.5, 0.1);
+    out.text(
+        label,
+        Rect::new(pill.x + PAD, pill.y + (H - 30.) / 2., width, 30.),
+        style,
+        out.theme.ink(1.),
+        false,
+    );
 }
 
 /// The actions of the app in hand, as tvOS 26 controls: small glass
@@ -530,19 +534,7 @@ pub(super) fn options(
         .collect();
     let total = widths.iter().sum::<f32>() + GAP * (widths.len() - 1) as f32;
     let (centre, y) = match anchor {
-        Some(tile) => {
-            // Clear of the tile's focus lift, and of the dock's glass edge.
-            let overhang = tile.h * super::FOCUS_SCALE / 2.;
-            let below = tile.y + tile.h + overhang + 22.;
-            (
-                tile.x + tile.w / 2.,
-                if below + H <= 1020. {
-                    below
-                } else {
-                    tile.y - overhang - 44. - H
-                },
-            )
-        }
+        Some(tile) => beside_tile(tile, H),
         None => (960., 540. - H / 2.),
     };
     let mut x = (centre - total / 2.).clamp(80., 1840. - total);

@@ -18,7 +18,6 @@ pub(crate) fn test_assets() -> view::Assets {
         root: PathBuf::new(),
         icons: BTreeMap::new(),
         colors: BTreeMap::new(),
-        version: "test".into(),
         metrics: BTreeMap::new(),
         tiles: Default::default(),
         heroes: Default::default(),
@@ -2742,4 +2741,19 @@ fn a_live_card_reads_live_now_not_its_upload_age() {
     };
     assert_eq!(meta(true), "ETV Andhra Pradesh · Live now");
     assert_eq!(meta(false), "ETV Andhra Pradesh · 4 hours ago");
+}
+
+#[test]
+fn move_says_what_the_arrows_do_beside_the_app_in_hand() {
+    let mut state = ready();
+    let hint = |state: &State| {
+        ui_text(state)
+            .iter()
+            .any(|line| line == "Use the arrows to move it, then press OK")
+    };
+    assert!(!hint(&state));
+    state.moving = Some("netflix".into());
+    assert!(hint(&state), "Move shows what the arrows do");
+    state.moving = None;
+    assert!(!hint(&state), "and goes when Move ends");
 }
