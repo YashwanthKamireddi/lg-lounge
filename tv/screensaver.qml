@@ -490,28 +490,26 @@ WebOSWindow {
         }
     }
 
-    // A drift of a few pixels about the exact centre, minutes per step: the face reads as
-    // centred, as a watch face is, while no pixel holds the same light all night. (LG's own
-    // pixel shift guards OLED panels as well.)
+    // A drift of a few pixels about the exact centre: the face reads as centred, as a watch face
+    // is, while no pixel holds the same light all night. (LG's own pixel shift guards OLED panels
+    // as well.) It steps once a minute, a pixel or two at a time, along a slow closed path: a
+    // continuous animation redrew the whole saver every frame all night, even on the faces that
+    // otherwise change once a second.
     QtObject {
         id: drift
         property real dx: 0
         property real dy: 0
+        property int minute: 0
+        function step() {
+            minute += 1
+            dx = Math.round(8 * Math.sin(minute * 2 * Math.PI / 36))
+            dy = Math.round(6 * Math.sin(minute * 2 * Math.PI / 54))
+        }
     }
-    SequentialAnimation {
+    Timer {
+        interval: 60000
         running: true
-        loops: Animation.Infinite
-        ParallelAnimation {
-            NumberAnimation { target: drift; property: "dx"; to: 8; duration: 180000; easing.type: Easing.InOutSine }
-            NumberAnimation { target: drift; property: "dy"; to: -6; duration: 180000; easing.type: Easing.InOutSine }
-        }
-        ParallelAnimation {
-            NumberAnimation { target: drift; property: "dx"; to: -8; duration: 180000; easing.type: Easing.InOutSine }
-            NumberAnimation { target: drift; property: "dy"; to: 6; duration: 180000; easing.type: Easing.InOutSine }
-        }
-        ParallelAnimation {
-            NumberAnimation { target: drift; property: "dx"; to: 0; duration: 180000; easing.type: Easing.InOutSine }
-            NumberAnimation { target: drift; property: "dy"; to: 0; duration: 180000; easing.type: Easing.InOutSine }
-        }
+        repeat: true
+        onTriggered: drift.step()
     }
 }
