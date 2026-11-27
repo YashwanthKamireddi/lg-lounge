@@ -742,7 +742,18 @@ fn about(out: &mut Scene, state: &State, assets: &Assets, section: Option<usize>
     let (about, glyph) = match section {
         Some(GENERAL_SECTION) if state.subpage == Some(Subpage::Hidden) => ("aboutHidden", "gear"),
         None => ("aboutSettings", "tv-bold"),
-        Some(GENERAL_SECTION) => ("aboutGeneral", "gear"),
+        // Says only what the page lists: Lounge as Home and Hidden apps come and go.
+        Some(GENERAL_SECTION) => {
+            let rows = section_rows(state, GENERAL_SECTION);
+            let has = |id| rows.iter().any(|row| row.id == id);
+            let about = match (has(10), has(7)) {
+                (true, true) => "aboutGeneral",
+                (true, false) => "aboutGeneralHome",
+                (false, true) => "aboutGeneralHidden",
+                (false, false) => "aboutGeneralClock",
+            };
+            (about, "gear")
+        }
         Some(HOME_SECTION) => (
             if state.heroes.is_empty() {
                 "aboutHomeScreenNoArt"

@@ -206,6 +206,9 @@
   "homeScreen": "Home Screen",
   "accessibility": "Accessibility",
   "aboutGeneral": "The clock, Lounge as your TV's Home, and apps you've hidden.",
+  "aboutGeneralHome": "The clock, and Lounge as your TV's Home.",
+  "aboutGeneralHidden": "The clock, and apps you've hidden.",
+  "aboutGeneralClock": "The clock, 12-hour or 24-hour.",
   "aboutHomeScreen": "How Home looks: its clock, the screen saver, pinned YouTube channels, light or dark, app names, cover art and your picture.",
   "aboutHomeScreenNoArt": "How Home looks: its clock, the screen saver, pinned YouTube channels, light or dark, app names and your picture.",
   "aboutAccessibility": "Larger names, a clear focus outline and less motion."

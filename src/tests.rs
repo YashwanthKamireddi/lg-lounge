@@ -2667,3 +2667,20 @@ fn pins_are_not_refreshed_for_nobody_and_are_at_the_next_press() {
     state.touched();
     assert!(state.pins_due(true).is_some());
 }
+
+#[test]
+fn the_general_caption_names_only_the_rows_the_page_lists() {
+    let mut state = ready();
+    state.page = Page::Settings;
+    state.section = crate::state::GENERAL_SECTION;
+    state.focus = Target::Setting(1);
+    let caption = |state: &State| ui_text(state).join(" ");
+    // No word from the TV about its Home and nothing hidden: only the clock is described.
+    assert!(caption(&state).contains("The clock, 12-hour or 24-hour."));
+    assert!(!caption(&state).contains("hidden"));
+    // Hiding an app brings its row, and the caption mentions it.
+    let app = state.inventory.apps[0].id.clone();
+    state.preferences.hidden.push(app);
+    assert!(caption(&state).contains("apps you've hidden"));
+    assert!(!caption(&state).contains("TV's Home"));
+}
