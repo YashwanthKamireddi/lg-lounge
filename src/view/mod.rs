@@ -214,9 +214,28 @@ pub fn resident(state: &State, assets: &Assets) -> Vec<String> {
             keep.push(path);
         }
     }
-    // The shelf's pictures too, whichever app it is for: back from the grid it shows at once,
-    // not blank while they go up again.
-    for row in state.shelf.values() {
+    // The shelf's first pictures too, whichever app it is for: back from the grid it shows at
+    // once, not blank while they go up again. Only the cards it opens on (four show, and the
+    // next as the row glides): at the 24-pin limit every card held would take most of the
+    // budget and push the icons and wallpapers out instead. Later cards load as they are reached.
+    const RESIDENT_CARDS: usize = 6;
+    let mut held: Vec<(&str, usize)> = Vec::new();
+    for pin in &state.preferences.pins {
+        let Some(row) = state.shelf.get(&pin.key()) else {
+            continue;
+        };
+        let app = pin.app();
+        let count = match held.iter_mut().find(|(held_app, _)| *held_app == app) {
+            Some((_, count)) => count,
+            None => {
+                held.push((app, 0));
+                &mut held.last_mut().expect("just pushed").1
+            }
+        };
+        if *count == RESIDENT_CARDS {
+            continue;
+        }
+        *count += 1;
         let shown = row.cards.first().and_then(|card| card.image.clone());
         keep.extend(shown.into_iter().chain(row.avatar.clone()));
     }
