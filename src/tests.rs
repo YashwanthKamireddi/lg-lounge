@@ -2485,3 +2485,45 @@ fn an_unreachable_refresh_is_tried_again_soon_not_in_a_quarter_hour() {
     // Behind an app nothing is fetched, due or not.
     assert!(state.pins_due(false).is_none());
 }
+
+#[test]
+fn the_pointer_moving_onto_a_shelf_card_keeps_the_shelf() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::{Card, Response};
+    let mut state = ready();
+    let pin = Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    };
+    state.preferences.pins.push(pin.clone());
+    state.pins_response(Response::Shelf {
+        pin: pin.key(),
+        cards: vec![Card {
+            video: "kJqrDRnWA9s".into(),
+            title: "News".into(),
+            published: String::new(),
+            image: None,
+        }],
+        avatar: None,
+    });
+    state.focus = Target::App(crate::state::YOUTUBE.into());
+    state.tick();
+    assert!(state.shelf_visible());
+    // The pointer lands on the card: focus moves there without Up.
+    state.focus = Target::Card(0);
+    state.tick();
+    assert!(state.shelf_visible(), "the shelf stays under the pointer");
+    assert_eq!(state.shelf_cards().len(), 1);
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Open(
+            crate::state::YOUTUBE.into(),
+            crate::youtube::launch_params("kJqrDRnWA9s")
+        )]
+    );
+    // Back from it returns to YouTube.
+    state.back();
+    assert_eq!(state.focus, Target::App(crate::state::YOUTUBE.into()));
+}

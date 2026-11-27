@@ -605,7 +605,7 @@ impl State {
         if self.cancel_launch() {
             return vec![];
         }
-        if self.shelf_open && self.overlay.is_none() {
+        if (self.shelf_open || matches!(self.focus, Target::Card(_))) && self.overlay.is_none() {
             self.close_shelf();
             return vec![];
         }

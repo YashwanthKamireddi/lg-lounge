@@ -28,7 +28,8 @@ pub struct ShelfCard<'a> {
 impl State {
     /// The dock app the shelf is about: the one it was opened from, or the focused one.
     pub fn shelf_app(&self) -> Option<&str> {
-        if self.shelf_open {
+        // In its cards, by arrows or by the Magic Remote's pointer, the shelf stays its app's.
+        if self.shelf_open || matches!(self.focus, Target::Card(_)) {
             return self.shelf_owner.as_deref();
         }
         let Target::App(id) = &self.focus else {
@@ -71,6 +72,19 @@ impl State {
 
     /// Notes the shelf appearing or leaving, for the crossfade with the clock (once a frame).
     pub(super) fn track_shelf(&mut self) {
+        // The dock app a shelf shows for is remembered, so a pointer moving onto a card (focus
+        // then on the card, not the app) keeps the shelf it saw.
+        if let Target::App(id) = &self.focus
+            && !self.shelf_open
+            && self.shelf_owner.as_ref() != Some(id)
+            && self
+                .apps()
+                .iter()
+                .take(APPS_COLUMNS)
+                .any(|app| &app.id == id)
+        {
+            self.shelf_owner = Some(id.clone());
+        }
         let visible = self.shelf_visible();
         if visible != self.shelf_was_visible {
             self.shelf_was_visible = visible;
@@ -107,7 +121,7 @@ impl State {
     /// Down or Back from the shelf: its app in the dock again.
     pub(super) fn close_shelf(&mut self) {
         self.shelf_open = false;
-        self.focus = Target::App(self.shelf_owner.take().unwrap_or_else(|| YOUTUBE.into()));
+        self.focus = Target::App(self.shelf_owner.clone().unwrap_or_else(|| YOUTUBE.into()));
         self.dirty = true;
     }
 
