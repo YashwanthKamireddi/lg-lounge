@@ -59,13 +59,17 @@ WebOSWindow {
         return (settings.hour24 && hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes
     }
 
-    // The digital faces change on each second's tick: the minute turns on time, to the second.
+    // The digital faces change on each second's tick, and each tick lands just past the wall
+    // clock's second: counted from when the saver opened, the minute turned up to a second late.
     Timer {
         interval: 1000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: window.now = new Date()
+        onTriggered: {
+            window.now = new Date()
+            interval = 1010 - window.now.getMilliseconds()
+        }
     }
 
     // Toasts would draw over the saver, as LG's own saver keeps them off.
@@ -245,7 +249,11 @@ WebOSWindow {
                 interval: 1000
                 running: true
                 repeat: true
-                onTriggered: hands.set()
+                // On the wall clock's second, as the digital faces' tick.
+                onTriggered: {
+                    hands.set()
+                    interval = 1010 - new Date().getMilliseconds()
+                }
             }
         }
 
