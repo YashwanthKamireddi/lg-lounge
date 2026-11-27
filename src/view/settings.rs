@@ -165,7 +165,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::WeatherToggle,
-            rect: Rect::new(LIST_X, 164.8 - s, LIST_W, 72.),
+            rect: Rect::new(LIST_X, 164.8 - s, LIST_W, ROW_H),
             title: i18n::t("showWidget"),
             icon: Some("eye"),
             value: Some(if state.preferences.show_weather {
@@ -187,8 +187,14 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let style = row_style();
     let line = 32.;
     let city_lines = city.map_or(1, |city| assets.lines(city, style, 450.));
-    let height = (34. + city_lines as f32 * line).max(72.);
-    let rect = Rect::new(LIST_X, 264.8 - s, LIST_W, height);
+    // Shown but with nowhere to show it for, Home has no weather: the row says what it needs.
+    let needs_place = state.preferences.show_weather && city.is_none();
+    let height = if needs_place {
+        92.
+    } else {
+        (34. + city_lines as f32 * line).max(72.)
+    };
+    let rect = Rect::new(LIST_X, 164.8 + ROW_H + ROW_GAP - s, LIST_W, height);
     row(
         out,
         state,
@@ -200,7 +206,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             icon: Some("location"),
             // No city yet: say so, as tvOS does, rather than an empty row.
             value: city.is_none().then(|| i18n::t("notSet")),
-            description: None,
+            description: needs_place.then(|| i18n::t("locationNeeded")),
             selected: false,
             chevron: true,
         },
