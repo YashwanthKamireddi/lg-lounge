@@ -92,6 +92,10 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'assets/font-clock.ttf',
     'assets/font-telugu.ttf',
     'assets/font-devanagari.ttf',
+    'assets/font-tamil.ttf',
+    'assets/font-kannada.ttf',
+    'assets/font-malayalam.ttf',
+    'assets/font-bengali.ttf',
     'assets/font-license.txt',
     'assets/version.txt',
     ...[350, 400, 450, 500, 550, 600, 650, 800].flatMap((weight) => [

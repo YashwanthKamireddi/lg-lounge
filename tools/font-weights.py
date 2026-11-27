@@ -70,7 +70,7 @@ else:
 # Scripts SF Pro and Inter do not draw, shaped with rustybuzz (src/renderer/text.rs): Google's
 # Noto Sans (OFL), one semibold cut each, as the interface's titles are.
 fonts = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-for script in ("telugu", "devanagari"):
+for script in ("telugu", "devanagari", "tamil", "kannada", "malayalam", "bengali"):
     noto = TTFont(fonts / f"noto-sans-{script}.ttf")
     noto = instantiateVariableFont(noto, {"wght": 600, "wdth": 100})
     noto.save(directory / f"font-{script}.ttf")
