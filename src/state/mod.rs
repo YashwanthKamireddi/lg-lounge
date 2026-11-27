@@ -998,53 +998,20 @@ impl State {
                 !self.preferences.hidden.contains(&app.id) && !self.uninstalling.contains(&app.id)
             })
             .collect();
-        // Dock favourites first, then Settings and inputs, then A-Z.
+        // Dock favourites first in their saved order, then Settings, then A-Z.
         let rank = |app: &App| {
             ids.iter()
                 .position(|id| id == &app.id)
-                .unwrap_or(match app.brand.as_str() {
-                    "lounge-settings" => usize::MAX - 2,
-                    "lounge-input" => usize::MAX - 1,
-                    _ => usize::MAX,
+                .unwrap_or(if app.id == SETTINGS_TILE {
+                    usize::MAX - 1
+                } else {
+                    usize::MAX
                 })
         };
-        // An input the owner has not placed follows Settings, so a newly
-        // plugged-in device appears in one known place, never at the end of
-        // the grid. One that has a place in the saved order (moved there, or
-        // shown there when Move began) keeps it like any other app.
-        let after_settings = apps
-            .iter()
-            .find(|app| app.id == SETTINGS_TILE)
-            .map_or(usize::MAX - 2, |app| rank(app));
-        let place = |app: &App| {
-            if app.brand == "lounge-input" && !ids.contains(&app.id) {
-                // During Move a new device waits at the end: Move works on
-                // the saved order, where it has no place yet.
-                if self.moving.is_some() {
-                    (usize::MAX, 1)
-                } else {
-                    (after_settings, 1)
-                }
-            } else {
-                (rank(app), 0)
-            }
-        };
         apps.sort_by(|a, b| {
-            place(a).cmp(&place(b)).then_with(|| {
-                // Inputs in port order (HDMI 1, 2, …), as LG lists them;
-                // everything else A-Z.
-                if a.brand == "lounge-input" && b.brand == "lounge-input" {
-                    let port = |app: &App| {
-                        app.id
-                            .trim_start_matches(|c: char| !c.is_ascii_digit())
-                            .parse::<u8>()
-                            .unwrap_or(u8::MAX)
-                    };
-                    port(a).cmp(&port(b))
-                } else {
-                    a.title.to_lowercase().cmp(&b.title.to_lowercase())
-                }
-            })
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
         });
         apps
     }
@@ -1088,8 +1055,7 @@ impl State {
         None
     }
 
-    /// Settings, Search and visible HDMI inputs live in the grid as tiles, like
-    /// tvOS's own Settings and Search icons.
+    /// Lounge's own Settings lives in the grid as a tile, like tvOS's Settings icon.
     pub fn refresh_tiles(&mut self) {
         self.inventory
             .apps
