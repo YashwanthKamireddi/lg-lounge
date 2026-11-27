@@ -68,6 +68,17 @@ fn query<'a>(url: &'a str, key: &str) -> Option<&'a str> {
 /// shorts, playlist, channel and @handle pages. A bare @handle or channel id works too.
 pub fn parse_link(text: &str) -> Option<Link> {
     let text = text.trim();
+    // Shared from an app, a link can arrive with words around it ("Watch … https://youtu.be/…"):
+    // the first word that is a YouTube link is the one meant.
+    if text.contains(char::is_whitespace) {
+        return text.split_whitespace().find_map(|word| {
+            parse_one(word.trim_matches(|c: char| matches!(c, '"' | '\'' | '(' | ')' | '<' | '>')))
+        });
+    }
+    parse_one(text)
+}
+
+fn parse_one(text: &str) -> Option<Link> {
     if let Some(handle) = text.strip_prefix('@') {
         return is_handle(handle).then(|| Link::Handle(handle.to_owned()));
     }
@@ -292,12 +303,22 @@ mod tests {
             parse_link("https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG"),
             Some(Link::Playlist("PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG".into()))
         );
+        // With words around it, as some apps share: the link in it.
+        assert_eq!(
+            parse_link("Watch \"News\" on YouTube: https://youtu.be/kJqrDRnWA9s?si=abc shared"),
+            Some(Link::Video("kJqrDRnWA9s".into()))
+        );
+        assert_eq!(
+            parse_link("ETV Telangana (https://www.youtube.com/@ETVTelangana)"),
+            Some(Link::Handle("ETVTelangana".into()))
+        );
         // Not YouTube, or not a link to anything.
         for text in [
             "https://example.com/watch?v=kJqrDRnWA9s",
             "https://www.youtube.com/",
             "https://www.youtube.com/watch?v=short",
             "hello",
+            "hello there friend",
             "",
         ] {
             assert_eq!(parse_link(text), None, "{text}");
