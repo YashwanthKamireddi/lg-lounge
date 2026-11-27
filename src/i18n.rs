@@ -28,14 +28,6 @@ pub fn wallpaper(id: &str) -> &str {
         _ => id,
     })
 }
-pub fn greeting(hour: u8) -> &'static str {
-    t(match hour {
-        0..=4 => "greetingNight",
-        5..=11 => "morning",
-        12..=17 => "afternoon",
-        _ => "evening",
-    })
-}
 /// The menu bar's short date: "Sat 25 Oct".
 pub fn short_date(now: OffsetDateTime) -> String {
     format!(
@@ -47,9 +39,6 @@ pub fn short_date(now: OffsetDateTime) -> String {
             "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         ][now.month() as usize - 1]
     )
-}
-pub fn date(now: OffsetDateTime) -> String {
-    format!("{}, {} {}", now.weekday(), now.month(), now.day()).to_uppercase()
 }
 pub fn clock(now: OffsetDateTime, hour24: bool) -> String {
     if hour24 {
@@ -89,7 +78,6 @@ mod tests {
             &time::format_description::well_known::Rfc3339,
         )
         .unwrap();
-        assert_eq!(date(now), "WEDNESDAY, OCTOBER 21");
         assert_eq!(short_date(now), "Wed 21 Oct");
         assert_eq!(clock(now, false), "8:41 PM");
         assert_eq!(clock(now, true), "20:41");

@@ -121,14 +121,8 @@ impl State {
                 }
                 return vec![];
             }
-            Target::App(id) | Target::Input(id) if !self.launch_busy() => {
+            Target::App(id) if !self.launch_busy() => {
                 return vec![Effect::Launch(id)];
-            }
-            Target::WeatherConfigure => {
-                self.open(2);
-                self.section = WEATHER_SECTION;
-                self.open_location();
-                self.open_keyboard();
             }
             Target::WeatherToggle => {
                 self.preferences.show_weather = !self.preferences.show_weather;

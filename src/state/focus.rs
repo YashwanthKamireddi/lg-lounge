@@ -119,8 +119,7 @@ impl State {
             }
             self.shown_page = self.page;
             self.shown_scroll = self.scroll;
-            self.shown_home_scroll = self.home_scroll;
-            self.scroll_velocity = [0.; 2];
+            self.scroll_velocity = 0.;
             // The switcher's cards jump to the focused one as well; left
             // behind, they never scroll and the frame never settles.
             if let (Some(switcher), Target::Switch(index)) = (&mut self.switcher, &self.focus) {
@@ -148,24 +147,19 @@ impl State {
         // so a heavy TV frame neither slows nor destabilises it, and a new
         // target mid-glide carries on from the current speed.
         let decay = (-SCROLL_SPRING * dt).exp();
-        let [velocity, home_velocity] = &mut self.scroll_velocity;
-        for (shown, velocity, target) in [
-            (&mut self.shown_scroll, velocity, self.scroll),
-            (&mut self.shown_home_scroll, home_velocity, self.home_scroll),
-        ] {
-            let offset = *shown - target;
-            let carried = *velocity + SCROLL_SPRING * offset;
-            let offset = (offset + carried * dt) * decay;
-            *velocity = (*velocity - SCROLL_SPRING * carried * dt) * decay;
-            // Settled within a fifth of a pixel and barely moving: the last
-            // step is no larger than the ones before it.
-            if offset.abs() < 0.2 && velocity.abs() < 12. {
-                *shown = target;
-                *velocity = 0.;
-            } else {
-                *shown = target + offset;
-                self.dirty = true;
-            }
+        let target = self.scroll;
+        let offset = self.shown_scroll - target;
+        let carried = self.scroll_velocity + SCROLL_SPRING * offset;
+        let offset = (offset + carried * dt) * decay;
+        self.scroll_velocity = (self.scroll_velocity - SCROLL_SPRING * carried * dt) * decay;
+        // Settled within a fifth of a pixel and barely moving: the last
+        // step is no larger than the ones before it.
+        if offset.abs() < 0.2 && self.scroll_velocity.abs() < 12. {
+            self.shown_scroll = target;
+            self.scroll_velocity = 0.;
+        } else {
+            self.shown_scroll = target + offset;
+            self.dirty = true;
         }
     }
 
@@ -191,7 +185,6 @@ impl State {
     /// Pointer paths deliberately do not call this method.
     pub fn reveal_focus(&mut self, controls: &[Control]) -> bool {
         let previous = self.scroll;
-        let previous_home = self.home_scroll;
         // tvOS home: the dock row shows Top Shelf mode; any other row slides
         // the grid up so the dock sits at the top, scrolling further as needed.
         if self.page == Page::Apps
@@ -223,13 +216,6 @@ impl State {
             return self.scroll != previous;
         }
         if let Some(control) = controls.iter().find(|c| c.target == self.focus) {
-            if self.page == Page::Home && matches!(self.focus, Target::App(_)) {
-                if control.rect.x < HOME_STRIP_LEFT {
-                    self.home_scroll += control.rect.x - HOME_STRIP_LEFT;
-                } else if control.rect.x + control.rect.w > HOME_STRIP_RIGHT {
-                    self.home_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
-                }
-            }
             if matches!(self.focus, Target::Nav(_) | Target::Sidebar(_)) {
                 self.scroll = 0.;
             } else if control.scrollable {
@@ -242,9 +228,7 @@ impl State {
                 if control.rect.y < top {
                     self.scroll = (self.scroll + control.rect.y - top).max(0.);
                 }
-                let bottom = if self.page == Page::Home && self.moving.is_none() {
-                    1041.6
-                } else if self.page == Page::Settings {
+                let bottom = if self.page == Page::Settings {
                     // Clear of the list's fade at the bottom (view::settings).
                     SETTINGS_LIST_END
                 } else {
@@ -255,13 +239,10 @@ impl State {
                 }
             }
         }
-        if self.page == Page::Home {
-            self.scroll_favorites(0.);
-        }
-        if self.scroll != previous || self.home_scroll != previous_home {
+        if self.scroll != previous {
             self.dirty = true;
         }
-        self.scroll != previous || self.home_scroll != previous_home
+        self.scroll != previous
     }
 
     /// Hover and pointer-down must not move the control before pointer-up.

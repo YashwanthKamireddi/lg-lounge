@@ -48,10 +48,7 @@ pub const APPS_COLUMNS: usize = 5;
 pub const LAUNCH_CANCEL_WINDOW: Duration = Duration::from_secs(15);
 /// The lowest a focused Settings row reaches: above the list's fade into its bottom edge.
 pub const SETTINGS_LIST_END: f32 = 968. - 64. - 8.;
-pub const HOME_STRIP_LEFT: f32 = 84.;
-pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 324.;
-pub const HOME_TILE_PITCH: f32 = 354.;
 /// How long focus takes to land on the next control: short, so the highlight is where the
 /// press went before the eye looks for it.
 pub const FOCUS_MS: f32 = 180.;
@@ -99,7 +96,6 @@ pub const SWITCHER_DISMISS_MS: u64 = 220;
 
 fn page_order(page: Page) -> f32 {
     match page {
-        Page::Home => 0.,
         Page::Apps => 1.,
         Page::Settings => 2.,
     }
@@ -112,7 +108,6 @@ fn eased(start: &Instant) -> f32 {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum Page {
-    Home,
     Apps,
     Settings,
 }
@@ -122,7 +117,6 @@ pub enum Target {
     Nav(usize),
     Switch(usize),
     App(String),
-    Input(String),
     Browse,
     Sidebar(usize),
     Setting(usize),
@@ -131,7 +125,6 @@ pub enum Target {
     Retry,
     DismissNotice,
     Option(usize),
-    WeatherConfigure,
     WeatherToggle,
     WeatherLocation,
     WeatherTemperature,
@@ -339,7 +332,6 @@ pub struct State {
     pub section: usize,
     pub subpage: Option<Subpage>,
     pub scroll: f32,
-    pub home_scroll: f32,
     pub overlay: Option<Overlay>,
     pub moving: Option<String>,
     /// When Move began: the app lifts out of the grid from then.
@@ -385,12 +377,11 @@ pub struct State {
     pub focus_from: Option<(Target, Instant, f32)>,
     focus_since: Option<Instant>,
     last_focus: Target,
-    /// Drawn scroll offsets glide toward `scroll`/`home_scroll`; layout and
-    /// navigation always use the exact targets.
+    /// The drawn scroll glides toward `scroll`; layout and navigation always use the exact
+    /// target.
     pub shown_scroll: f32,
-    pub shown_home_scroll: f32,
-    /// How fast each drawn scroll is gliding (px/s).
-    scroll_velocity: [f32; 2],
+    /// How fast the drawn scroll is gliding (px/s).
+    scroll_velocity: f32,
     shown_page: Page,
     /// The page last left and its drawn scroll then: a page change dissolves
     /// out of the background that page showed.
@@ -568,7 +559,6 @@ impl State {
             section: 0,
             subpage: None,
             scroll: 0.,
-            home_scroll: 0.,
             overlay: None,
             moving: None,
             moving_since: None,
@@ -595,8 +585,7 @@ impl State {
             focus_since: None,
             last_focus: Target::Nav(0),
             shown_scroll: 0.,
-            shown_home_scroll: 0.,
-            scroll_velocity: [0.; 2],
+            scroll_velocity: 0.,
             shown_page: Page::Apps,
             left: (Page::Apps, 0.),
             last_tick: crate::clock::now(),
@@ -875,7 +864,6 @@ impl State {
 
     pub fn page_index(&self) -> usize {
         match self.page {
-            Page::Home => 0,
             Page::Apps => 1,
             Page::Settings => 2,
         }
@@ -898,7 +886,6 @@ impl State {
             || self.focus_from.is_some()
             || self.page_since.is_some()
             || self.shown_scroll != self.scroll
-            || self.shown_home_scroll != self.home_scroll
             || self.shelf_from.is_some()
             || self.shelf_pending.is_some()
             || self.settings_since.is_some()
@@ -990,9 +977,6 @@ impl State {
             Page::Apps
         };
         self.scroll = 0.;
-        if self.page == Page::Home {
-            self.scroll_favorites(0.);
-        }
         self.overlay = None;
         self.moving = None;
         self.subpage = None;
@@ -1003,15 +987,6 @@ impl State {
 
     pub fn apps(&self) -> Vec<&App> {
         let ids = self.preferences.favorites(&self.inventory.apps);
-        if self.page == Page::Home {
-            return ids
-                .iter()
-                .filter(|id| {
-                    !self.preferences.hidden.contains(id) && !self.uninstalling.contains(id)
-                })
-                .filter_map(|id| self.inventory.apps.iter().find(|app| &app.id == id))
-                .collect();
-        }
         let mut apps: Vec<_> = self
             .inventory
             .apps
@@ -1072,29 +1047,6 @@ impl State {
             })
         });
         apps
-    }
-
-    pub fn scroll_favorites(&mut self, delta: f32) {
-        let count = self
-            .preferences
-            .favorites(&self.inventory.apps)
-            .iter()
-            .filter(|id| {
-                !self.preferences.hidden.contains(id)
-                    && self.inventory.apps.iter().any(|app| &app.id == *id)
-            })
-            .count();
-        let content = if count == 0 {
-            0.
-        } else {
-            (count - 1) as f32 * HOME_TILE_PITCH + HOME_TILE_WIDTH
-        };
-        let max = (content - (HOME_STRIP_RIGHT - HOME_STRIP_LEFT)).max(0.);
-        let next = (self.home_scroll + delta).clamp(0., max);
-        if next != self.home_scroll {
-            self.home_scroll = next;
-            self.dirty = true;
-        }
     }
 
     pub fn set_inventory(&mut self, next: Inventory, warning: Option<String>) {
@@ -1161,9 +1113,6 @@ impl State {
         if self.page == Page::Apps && matches!(self.focus, Target::Nav(_)) {
             self.focus = self.first_content();
         }
-        if self.page == Page::Home {
-            self.scroll_favorites(0.);
-        }
         self.focus = self.reconciled(self.focus.clone());
         // What the switcher, a menu or an alert puts focus back on when it
         // closes follows the same apps (an app can go while one is open).
@@ -1208,29 +1157,11 @@ impl State {
                 .map(|app| Target::App(app.id.clone()))
                 .unwrap_or_else(|| self.first_content());
         }
-        if let Target::Input(id) = &target
-            && !self
-                .inventory
-                .inputs
-                .iter()
-                .any(|input| &input.id == id && self.preferences.input_visible(input))
-        {
-            return self.first_content();
-        }
         target
     }
 
     pub fn first_content(&self) -> Target {
         match self.page {
-            Page::Home => self
-                .apps()
-                .get(((self.home_scroll - 0.01).max(0.) / HOME_TILE_PITCH).ceil() as usize)
-                .map(|app| Target::App(app.id.clone()))
-                .unwrap_or(if self.error.is_some() {
-                    Target::Retry
-                } else {
-                    Target::Browse
-                }),
             Page::Apps => self
                 .apps()
                 .first()

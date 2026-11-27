@@ -162,7 +162,7 @@ impl Harness {
                         "{what} launched {id}, but the press did not begin and end on the same stretch on screen"
                     );
                     match &down.target {
-                        Target::App(app) | Target::Input(app) | Target::InputPick(app) => {
+                        Target::App(app) | Target::InputPick(app) => {
                             assert_eq!(app, &id)
                         }
                         Target::Switch(_) => {}

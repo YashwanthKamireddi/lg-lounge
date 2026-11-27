@@ -450,7 +450,7 @@ fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32) {
 
 pub(super) fn footer(out: &mut Scene, state: &State, assets: &Assets) {
     // tvOS shows no hint bars: not on the home screen, in Move, or Settings.
-    if matches!(state.page, Page::Home | Page::Apps | Page::Settings) {
+    if matches!(state.page, Page::Apps | Page::Settings) {
         return;
     }
     // Discoverability hints for beginners, at tvOS caption size and inside the
@@ -623,7 +623,6 @@ fn pill_shown(state: &State) -> f32 {
     match state.page {
         Page::Apps => 1. - (state.shown_scroll / (GRID_SCROLL * 0.5)).clamp(0., 1.),
         Page::Settings => 0.,
-        Page::Home => 1.,
     }
 }
 

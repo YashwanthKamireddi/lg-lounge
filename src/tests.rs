@@ -1,5 +1,5 @@
 use crate::{
-    model::{App, Input, InputMode, Preferences, demo_inventory},
+    model::{App, Preferences, demo_inventory},
     platform::{normalize_apps, normalize_inputs},
     state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
@@ -241,45 +241,18 @@ fn icon_collector_visibility_cases_match_the_launcher_inventory() {
 }
 
 #[test]
-fn auto_input_visibility_requires_a_positive_connection_report() {
-    let mut preferences = Preferences::default();
-    let mut input = Input {
-        id: "com.webos.app.hdmi1".into(),
-        title: "Console".into(),
-        port: "HDMI 1".into(),
-        connected: None,
-    };
-    assert!(!preferences.input_visible(&input));
-    input.connected = Some(true);
-    assert!(preferences.input_visible(&input));
-    preferences
-        .input_modes
-        .insert(input.id.clone(), InputMode::Off);
-    assert!(!preferences.input_visible(&input));
-    preferences
-        .input_modes
-        .insert(input.id.clone(), InputMode::On);
-    input.connected = Some(false);
-    assert!(preferences.input_visible(&input));
-}
-
-#[test]
 fn preferences_round_trip_and_corrupt_data_is_not_silently_overwritten() {
     let directory = std::env::temp_dir().join(format!("lounge-test-{}", std::process::id()));
     let path = directory.join("preferences.json");
-    let mut preferences = Preferences {
+    let preferences = Preferences {
         favorites: Some(vec![]),
         background: "forest".into(),
         ..Preferences::default()
     };
-    preferences
-        .input_modes
-        .insert("com.webos.app.hdmi1".into(), InputMode::Off);
     storage::save(&path, &preferences).unwrap();
     let loaded = storage::load(&path).unwrap();
     assert_eq!(loaded.favorites, Some(vec![]));
     assert_eq!(loaded.background, "forest");
-    assert_eq!(loaded.input_modes["com.webos.app.hdmi1"], InputMode::Off);
     std::fs::write(&path, "broken").unwrap();
     assert!(storage::load(&path).is_err());
     // Starting up, a damaged file is kept aside (never overwritten) and Lounge
@@ -1420,16 +1393,12 @@ fn an_unknown_preference_value_keeps_every_other_preference() {
     let preferences: Preferences = serde_json::from_value(json!({
         "background": "forest",
         "appearance": "Sepia",
-        "input_modes": {"com.webos.app.hdmi1": "Bogus", "com.webos.app.hdmi2": "Off"},
+        "clock": "Sundial",
     }))
     .unwrap();
     assert_eq!(preferences.background, "forest");
     assert_eq!(preferences.appearance, crate::model::Appearance::default());
-    assert_eq!(preferences.input_modes.len(), 1);
-    assert_eq!(
-        preferences.input_modes.get("com.webos.app.hdmi2"),
-        Some(&InputMode::Off)
-    );
+    assert_eq!(preferences.clock, crate::model::ClockStyle::default());
 }
 
 #[test]

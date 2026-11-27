@@ -1,6 +1,6 @@
 use crate::weather::{Location, Unit};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 /// LG's Live TV app: the first source in the Inputs panel.
 pub const LIVE_TV: &str = "com.webos.app.livetv";
@@ -149,14 +149,6 @@ pub struct Inventory {
     pub inputs: Vec<Input>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub enum InputMode {
-    #[default]
-    Auto,
-    On,
-    Off,
-}
-
 /// Settings, menus, glass and the time pill: dark, light, or light by day
 /// and dark from 19:00 to 06:00.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -262,8 +254,6 @@ pub struct Preferences {
     pub large_names: bool,
     /// Lounge has asked, once, whether to become the TV's Home (see `Overlay::OfferHome`).
     pub home_offered: bool,
-    #[serde(deserialize_with = "lenient_modes")]
-    pub input_modes: BTreeMap<String, InputMode>,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -307,17 +297,6 @@ fn lenient_pins<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec
         .collect())
 }
 
-/// Input modes one by one: an unknown mode drops only its own entry.
-fn lenient_modes<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<BTreeMap<String, InputMode>, D::Error> {
-    let raw = BTreeMap::<String, serde_json::Value>::deserialize(deserializer).unwrap_or_default();
-    Ok(raw
-        .into_iter()
-        .filter_map(|(id, mode)| Some((id, serde_json::from_value(mode).ok()?)))
-        .collect())
-}
-
 impl Default for Preferences {
     fn default() -> Self {
         Self {
@@ -330,7 +309,6 @@ impl Default for Preferences {
             focus_outline: false,
             large_names: false,
             home_offered: false,
-            input_modes: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
@@ -370,14 +348,6 @@ impl Preferences {
             }
             ids
         })
-    }
-
-    pub fn input_visible(&self, input: &Input) -> bool {
-        match self.input_modes.get(&input.id).copied().unwrap_or_default() {
-            InputMode::On => true,
-            InputMode::Off => false,
-            InputMode::Auto => input.connected == Some(true),
-        }
     }
 
     pub fn sanitize(&mut self) {
@@ -423,18 +393,8 @@ impl Preferences {
         // Settings holds the way back to hidden apps, so it is never hidden
         // (an earlier menu offered it, and that locked Settings away).
         self.hidden.retain(|id| id != crate::state::SETTINGS_TILE);
-        // An input hidden from its tile by an earlier version is Off in
-        // Settings › Inputs instead, its one switch.
-        let (inputs, apps): (Vec<String>, Vec<String>) = std::mem::take(&mut self.hidden)
-            .into_iter()
-            .partition(|id| id.starts_with("com.webos.app.hdmi"));
-        self.hidden = apps;
-        for id in inputs {
-            self.input_modes.insert(id, InputMode::Off);
-        }
         clean(&mut self.recent);
         self.recent.truncate(24);
-        self.input_modes.retain(|id, _| valid_app_id(id));
     }
 }
 
