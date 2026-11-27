@@ -12,8 +12,8 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket},
     path::PathBuf,
     sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::Sender,
     },
     time::Duration,
@@ -66,6 +66,15 @@ impl Drop for Session {
     }
 }
 
+/// How the TV answered the phone's pin links, in the order they came: each POST gets the next
+/// number, each answer the next number, so the phone waits for its own.
+#[derive(Default)]
+pub struct PinAnswers {
+    asked: AtomicU64,
+    /// The latest answer: its number, whether it was pinned, and what the TV said.
+    answered: Mutex<(u64, bool, String)>,
+}
+
 /// The one session at a time, owned by the loop.
 pub struct Service {
     storage: PathBuf,
@@ -73,6 +82,7 @@ pub struct Service {
     session: std::sync::Mutex<Option<Session>>,
     sender: Sender<Event>,
     pub receiver: std::sync::mpsc::Receiver<Event>,
+    answers: Arc<PinAnswers>,
 }
 
 impl Service {
@@ -84,7 +94,18 @@ impl Service {
             session: std::sync::Mutex::new(None),
             sender,
             receiver,
+            answers: Arc::default(),
         }
+    }
+
+    /// The TV's answer to the oldest pin link not yet answered, for the phone that sent it.
+    pub fn pin_answered(&self, pinned: bool, message: &str) {
+        let mut answered = self
+            .answers
+            .answered
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *answered = (answered.0 + 1, pinned, message.to_owned());
     }
 
     /// Starts listening for `kind` (ending any session before); its address and QR code.
@@ -99,6 +120,7 @@ impl Service {
             self.storage.clone(),
             self.sender.clone(),
             self.loopback,
+            self.answers.clone(),
         )?;
         let shown = (session.url.clone(), session.size, session.modules.clone());
         *slot = Some(session);
@@ -120,6 +142,7 @@ pub fn start(
     storage: PathBuf,
     events: Sender<Event>,
     loopback: bool,
+    answers: Arc<PinAnswers>,
 ) -> Result<Session, String> {
     let ip = if loopback {
         Ipv4Addr::LOCALHOST
@@ -154,7 +177,15 @@ pub fn start(
                 }
                 let _ = stream.set_read_timeout(Some(STALL));
                 let _ = stream.set_write_timeout(Some(STALL));
-                serve(&mut stream, kind, &host, &token, &storage, &events);
+                serve(
+                    &mut stream,
+                    kind,
+                    &host,
+                    &token,
+                    &storage,
+                    &events,
+                    &answers,
+                );
             }
         })
         .map_err(|error| error.to_string())?;
@@ -254,6 +285,7 @@ fn serve(
     token: &str,
     storage: &std::path::Path,
     events: &Sender<Event>,
+    answers: &PinAnswers,
 ) {
     let Ok((request, mut body)) = read_head(stream) else {
         return;
@@ -315,8 +347,22 @@ fn serve(
                 let _ = respond_json(stream, "422 Unprocessable Content", false, "notYouTube");
                 return;
             }
-            let _ = respond_json(stream, "200 OK", true, "");
+            // Its number: the phone asks for the answer with this number.
+            let number = answers.asked.fetch_add(1, Ordering::AcqRel) + 1;
+            let body = serde_json::json!({ "ok": true, "number": number }).to_string();
+            let _ = respond(stream, "200 OK", "application/json", body.as_bytes());
             send(Event::Pin(link));
+        }
+        ("GET", Some("answer")) if kind == Kind::Pins => {
+            let (number, pinned, message) = answers
+                .answered
+                .lock()
+                .map(|answered| answered.clone())
+                .unwrap_or_default();
+            let body =
+                serde_json::json!({ "number": number, "pinned": pinned, "message": message })
+                    .to_string();
+            let _ = respond(stream, "200 OK", "application/json", body.as_bytes());
         }
         ("GET", Some("app.js")) => {
             let _ = respond(
@@ -583,8 +629,19 @@ pin.addEventListener('click', async () => {
   try {
     const response = await fetch('pin', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: link.value.trim() });
     const reply = await response.json();
-    if (reply.ok) { status.textContent = status.dataset.sent; link.value = ''; }
-    else { status.textContent = status.dataset.wrong; pin.disabled = false; }
+    if (!reply.ok) { status.textContent = status.dataset.wrong; pin.disabled = false; return; }
+    status.textContent = status.dataset.sent;
+    // The TV looks the link up on YouTube; its own answer follows, in a moment.
+    for (let tries = 0; tries < 28; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const answer = await (await fetch('answer')).json();
+      if (answer.number >= reply.number) {
+        status.textContent = answer.message;
+        if (answer.pinned) link.value = '';
+        else pin.disabled = !link.value.trim();
+        return;
+      }
+    }
   } catch (error) { status.textContent = status.dataset.failed; pin.disabled = false; }
 });
 "#;
@@ -763,6 +820,49 @@ mod session_tests {
         service.stop();
         std::thread::sleep(Duration::from_millis(100));
         assert!(TcpStream::connect(host).is_err());
+        let _ = std::fs::remove_dir_all(&storage);
+    }
+
+    #[test]
+    fn a_pasted_link_gets_its_own_answer_from_the_tv() {
+        let storage = std::env::temp_dir().join(format!("lounge-pins-page-{}", std::process::id()));
+        let service = Service::new(storage.clone(), true);
+        let (url, ..) = service.start(Kind::Pins).unwrap();
+        let rest = url.strip_prefix("http://").unwrap();
+        let (host, path) = rest.split_once('/').unwrap();
+        let page = format!("/{path}");
+        let post = |link: &str| {
+            exchange(
+                host,
+                format!(
+                    "POST {page}pin HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{link}",
+                    link.len()
+                )
+                .as_bytes(),
+            )
+        };
+        let answer = || {
+            exchange(
+                host,
+                format!("GET {page}answer HTTP/1.1\r\nHost: {host}\r\n\r\n").as_bytes(),
+            )
+        };
+        // Not a YouTube link: refused at once, nothing sent to the TV.
+        assert!(post("https://example.com/x").contains("notYouTube"));
+        // A link gets its number and goes to the TV.
+        assert!(post("https://www.youtube.com/@etvandhrapradesh").contains("\"number\":1"));
+        let Event::Pin(link) = service.receiver.recv().unwrap() else {
+            panic!("the link reaches the TV");
+        };
+        assert_eq!(link, "https://www.youtube.com/@etvandhrapradesh");
+        // Until the TV answers, the phone sees no answer with its number.
+        assert!(answer().contains("\"number\":0"));
+        service.pin_answered(true, "Pinned ETV Andhra Pradesh");
+        let reply = answer();
+        assert!(reply.contains("\"number\":1"));
+        assert!(reply.contains("\"pinned\":true"));
+        assert!(reply.contains("Pinned ETV Andhra Pradesh"));
+        service.stop();
         let _ = std::fs::remove_dir_all(&storage);
     }
 }

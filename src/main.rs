@@ -1557,7 +1557,23 @@ impl Shell {
             self.dispatch(vec![effect]);
         }
         while let Ok(response) = self.pins_service.receiver.try_recv() {
+            // A pasted link's answer goes back to the phone that sent it, in the TV's words.
+            let resolved = match &response {
+                pins_service::Response::Resolved(result) => Some(result.is_ok()),
+                _ => None,
+            };
             let effects = self.state.pins_response(response);
+            if let Some(ok) = resolved {
+                let message = self
+                    .state
+                    .notice
+                    .as_ref()
+                    .map(|notice| notice.0.clone())
+                    .unwrap_or_default();
+                // Only a new pin is saved: already pinned, or the list full, says so instead.
+                let pinned = ok && !effects.is_empty();
+                self.phone.pin_answered(pinned, &message);
+            }
             self.dispatch(effects);
         }
     }
