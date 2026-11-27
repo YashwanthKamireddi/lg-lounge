@@ -580,16 +580,19 @@ fn pins_html() -> Vec<u8> {
 html{{background:#07080f}}
 body{{margin:0;min-height:100svh;color:#f5f6fa;font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
 -webkit-font-smoothing:antialiased;background:
-radial-gradient(60% 50% at 20% 15%,#8b1e2a 0,transparent 70%),
-radial-gradient(55% 45% at 85% 30%,#1f3f8b 0,transparent 70%),
-radial-gradient(70% 60% at 50% 100%,#3a2f6b 0,transparent 70%),#0b0c18}}
+radial-gradient(60% 45% at 15% 10%,rgba(160,30,45,.45) 0,transparent 70%),
+radial-gradient(55% 45% at 90% 25%,rgba(40,70,150,.4) 0,transparent 70%),
+radial-gradient(70% 60% at 50% 100%,rgba(70,55,130,.35) 0,transparent 70%),#0b0c18}}
 main{{max-width:520px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));
 display:flex;flex-direction:column;gap:18px}}
 h1{{margin:6px 4px 0;font:700 34px/1.15 -apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.6px}}
 .hint{{margin:0 4px;color:rgba(235,236,245,.72);font-size:16px}}
 .glass{{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(28px) saturate(1.8);backdrop-filter:blur(28px) saturate(1.8);
 border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 18px 50px rgba(0,0,0,.35)}}
-input{{appearance:none;width:100%;min-height:56px;border-radius:18px;padding:16px 18px;color:#f5f6fa;font:inherit;outline:none}}
+/* A text field is quiet: dark glass, no colour pulled through it. */
+input{{appearance:none;width:100%;min-height:56px;border-radius:18px;padding:16px 18px;color:#f5f6fa;font:inherit;outline:none;
+background:rgba(10,11,20,.55);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}}
 input::placeholder{{color:rgba(235,236,245,.45)}}
 input:focus{{border-color:rgba(255,255,255,.45)}}
 .button{{appearance:none;border:0;border-radius:999px;min-height:56px;padding:16px 22px;font:inherit;font-weight:600;width:100%;cursor:pointer;
@@ -603,7 +606,7 @@ transition:transform .18s cubic-bezier(.2,.8,.2,1),opacity .2s ease}}
 <main>
 <h1>{title}</h1>
 <p class="hint">{hint}</p>
-<input class="glass" id="link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtube.com/@…" aria-label="{title}">
+<input id="link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtube.com/@…" aria-label="{title}">
 <button class="button" id="pin" disabled>{pin}</button>
 <p id="status" role="status" data-sent="{sent}" data-wrong="{wrong}" data-failed="{failed}"></p>
 </main>
