@@ -28,6 +28,8 @@ mod luna;
 mod model;
 mod options;
 mod photo;
+#[path = "pins-service.rs"]
+mod pins_service;
 mod platform;
 mod preload;
 mod presence;
@@ -53,6 +55,7 @@ mod weather_service;
 #[path = "webos-compat.rs"]
 mod webos_compat;
 mod window;
+mod youtube;
 
 #[cfg(test)]
 mod tests;
@@ -363,6 +366,7 @@ fn run() -> Result<(), String> {
     }
     // On the desktop preview too, the phone reaches it over the network, as on the TV.
     let phone = companion::Service::new(storage.clone(), false);
+    let pins_service = pins_service::Service::new(&storage);
     preload::request_home(&mut preload, &state, &assets);
     // The owner's profile pictures, prepared once (crate::avatars). A changed
     // picture is decoded (up to 4096²), scaled and blurred: on a worker, off
@@ -412,6 +416,7 @@ fn run() -> Result<(), String> {
         &writer,
         &weather_service,
         &phone,
+        &pins_service,
     );
     startup_stage("preferences and workers");
 
@@ -627,6 +632,7 @@ fn run() -> Result<(), String> {
         state,
         weather_service,
         phone,
+        pins_service,
         storage,
         platform,
         snapshots,
@@ -685,6 +691,8 @@ struct Shell {
     weather_service: weather_service::Service,
     /// A photo from the phone (crate::companion), while its QR code is on screen.
     phone: companion::Service,
+    /// YouTube pins: links resolved and the shelf's uploads kept fresh (pins_service).
+    pins_service: pins_service::Service,
     /// The folder beside the preferences.
     storage: PathBuf,
     platform: Platform,
@@ -813,6 +821,7 @@ impl Shell {
             self.state.dirty = true;
         }
         self.phone_tick();
+        self.pins_tick();
         if let Some(pictures) = &self.avatars {
             match pictures.try_recv() {
                 Ok(pictures) => {
@@ -931,6 +940,7 @@ impl Shell {
                 &self.writer,
                 &self.weather_service,
                 &self.phone,
+                &self.pins_service,
             );
         }
     }
@@ -1278,6 +1288,7 @@ impl Shell {
             &self.writer,
             &self.weather_service,
             &self.phone,
+            &self.pins_service,
         );
         self.remote.settle(&mut self.state);
         // SDL may deliver several navigation events in a single poll.
@@ -1300,6 +1311,7 @@ impl Shell {
                 &self.writer,
                 &self.weather_service,
                 &self.phone,
+                &self.pins_service,
             );
         }
         if !self.state.loading
@@ -1309,6 +1321,8 @@ impl Shell {
                 (action == "await-search"
                     && (self.state.weather.searching || self.state.weather.search_pending()))
                     || (action == "await-weather" && self.state.weather.fetching())
+                    || (action == "await-pins"
+                        && self.state.shelf.len() < self.state.preferences.pins.len())
             })
             && let Some(action) = self.options.script.pop_front()
         {
@@ -1328,6 +1342,7 @@ impl Shell {
                     &self.writer,
                     &self.weather_service,
                     &self.phone,
+                    &self.pins_service,
                 );
             }
         }
@@ -1512,6 +1527,17 @@ impl Shell {
         Ok(())
     }
 
+    /// The YouTube pins: a refresh when one is due, and what the worker answered.
+    fn pins_tick(&mut self) {
+        if let Some(effect) = self.state.pins_due(self.presence.visible) {
+            self.dispatch(vec![effect]);
+        }
+        while let Ok(response) = self.pins_service.receiver.try_recv() {
+            let effects = self.state.pins_response(response);
+            self.dispatch(effects);
+        }
+    }
+
     /// What the phone's session reported. The QR code closes when Lounge leaves the screen:
     /// the server never listens behind an app.
     fn phone_tick(&mut self) {
@@ -1537,6 +1563,7 @@ impl Shell {
                 &self.writer,
                 &self.weather_service,
                 &self.phone,
+                &self.pins_service,
             );
         }
     }
@@ -1590,6 +1617,11 @@ impl Shell {
             due(Duration::from_nanos(left) + Duration::from_millis(5));
             if self.state.ticking() {
                 due(Duration::from_millis(15));
+            }
+            // A scripted run steps every third frame: it keeps frames coming until it is done,
+            // also while it awaits a worker.
+            if !self.options.script.is_empty() {
+                due(Duration::from_millis(16));
             }
             if let Some(quiet) = self.state.quiet_for() {
                 due(quiet);

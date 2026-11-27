@@ -24,6 +24,8 @@ use std::{
 pub enum Kind {
     Wallpaper,
     Avatar,
+    /// YouTube links to pin, pasted on the phone.
+    Pins,
 }
 
 /// What a session reports to the loop.
@@ -36,6 +38,8 @@ pub enum Event {
     /// Saved: the new wallpaper's id, or the new picture's file name in the avatars folder.
     Saved(Kind, String),
     Failed(String),
+    /// A link pasted on the phone's pins page, to resolve on the TV.
+    Pin(String),
 }
 
 /// The largest upload taken: the page sends a fitted JPEG of a few MB at most.
@@ -279,6 +283,41 @@ fn serve(
                 &page_html(kind),
             );
         }
+        ("GET", Some("pins.js")) => {
+            let _ = respond(
+                stream,
+                "200 OK",
+                "text/javascript; charset=utf-8",
+                PINS_SCRIPT.as_bytes(),
+            );
+        }
+        ("POST", Some("pin")) if !foreign && kind == Kind::Pins => {
+            // A link, nothing more: a few hundred bytes.
+            let length = request
+                .headers
+                .get("content-length")
+                .and_then(|value| value.parse::<usize>().ok())
+                .filter(|length| *length > 0 && *length <= 2048);
+            let Some(length) = length else {
+                let _ = respond_json(stream, "413 Content Too Large", false, "tooLarge");
+                return;
+            };
+            let mut chunk = [0u8; 2048];
+            while body.len() < length {
+                match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => return,
+                    Ok(read) => body.extend_from_slice(&chunk[..read]),
+                }
+            }
+            body.truncate(length);
+            let link = String::from_utf8_lossy(&body).trim().to_owned();
+            if crate::youtube::parse_link(&link).is_none() {
+                let _ = respond_json(stream, "422 Unprocessable Content", false, "notYouTube");
+                return;
+            }
+            let _ = respond_json(stream, "200 OK", true, "");
+            send(Event::Pin(link));
+        }
         ("GET", Some("app.js")) => {
             let _ = respond(
                 stream,
@@ -311,6 +350,7 @@ fn serve(
             let saved = match kind {
                 Kind::Wallpaper => crate::photo::save_wallpaper(&body, storage),
                 Kind::Avatar => crate::photo::save_avatar(&body, storage),
+                Kind::Pins => return,
             };
             match saved {
                 Ok(name) => {
@@ -360,6 +400,9 @@ fn respond_json(
 
 /// The phone's page: one button, a preview, Send. The words are filled in by `kind`.
 fn page_html(kind: Kind) -> Vec<u8> {
+    if kind == Kind::Pins {
+        return pins_html();
+    }
     let (title, hint, width, height) = match kind {
         Kind::Wallpaper => (
             crate::i18n::t("phoneWallpaperTitle"),
@@ -367,7 +410,7 @@ fn page_html(kind: Kind) -> Vec<u8> {
             crate::photo::WALLPAPER_SIZE.0,
             crate::photo::WALLPAPER_SIZE.1,
         ),
-        Kind::Avatar => (
+        Kind::Avatar | Kind::Pins => (
             crate::i18n::t("phoneAvatarTitle"),
             crate::i18n::t("phoneAvatarHint"),
             crate::photo::AVATAR_SIDE,
@@ -469,6 +512,82 @@ box-shadow:inset 0 1px 0 #fff,0 10px 30px rgba(0,0,0,.3)}}
     )
     .into_bytes()
 }
+
+/// The pins page: paste a YouTube link, tap Pin; again for the next. The TV fetches the name and
+/// pictures and says "Pinned …".
+fn pins_html() -> Vec<u8> {
+    let escape = |text: &str| {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let t = |key| escape(crate::i18n::t(key));
+    format!(
+        r#"<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Lounge</title>
+<style>
+*{{box-sizing:border-box;-webkit-tap-highlight-color:transparent}}
+html{{background:#07080f}}
+body{{margin:0;min-height:100svh;color:#f5f6fa;font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+-webkit-font-smoothing:antialiased;background:
+radial-gradient(60% 50% at 20% 15%,#8b1e2a 0,transparent 70%),
+radial-gradient(55% 45% at 85% 30%,#1f3f8b 0,transparent 70%),
+radial-gradient(70% 60% at 50% 100%,#3a2f6b 0,transparent 70%),#0b0c18}}
+main{{max-width:520px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));
+display:flex;flex-direction:column;gap:18px}}
+h1{{margin:6px 4px 0;font:700 34px/1.15 -apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.6px}}
+.hint{{margin:0 4px;color:rgba(235,236,245,.72);font-size:16px}}
+.glass{{background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(28px) saturate(1.8);backdrop-filter:blur(28px) saturate(1.8);
+border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 18px 50px rgba(0,0,0,.35)}}
+input{{appearance:none;width:100%;min-height:56px;border-radius:18px;padding:16px 18px;color:#f5f6fa;font:inherit;outline:none}}
+input::placeholder{{color:rgba(235,236,245,.45)}}
+input:focus{{border-color:rgba(255,255,255,.45)}}
+.button{{appearance:none;border:0;border-radius:999px;min-height:56px;padding:16px 22px;font:inherit;font-weight:600;width:100%;cursor:pointer;
+background:rgba(255,255,255,.92);color:#0b0c18;box-shadow:inset 0 1px 0 #fff,0 10px 30px rgba(0,0,0,.3);
+transition:transform .18s cubic-bezier(.2,.8,.2,1),opacity .2s ease}}
+.button:active{{transform:scale(.97)}}
+.button:disabled{{opacity:.38;transform:none}}
+#status{{min-height:1.4em;margin:2px 0 0;text-align:center;color:rgba(235,236,245,.8)}}
+@media (prefers-reduced-motion:reduce){{*{{transition:none!important}}}}
+</style></head><body>
+<main>
+<h1>{title}</h1>
+<p class="hint">{hint}</p>
+<input class="glass" id="link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtube.com/@…" aria-label="{title}">
+<button class="button" id="pin" disabled>{pin}</button>
+<p id="status" role="status" data-sent="{sent}" data-wrong="{wrong}" data-failed="{failed}"></p>
+</main>
+<script src="pins.js"></script>
+</body></html>"#,
+        title = t("pinsPhoneTitle"),
+        hint = t("pinsPhoneHint"),
+        pin = t("pinsPhonePin"),
+        sent = t("pinsPhoneSent"),
+        wrong = t("pinsPhoneWrong"),
+        failed = t("phoneFailed"),
+    )
+    .into_bytes()
+}
+
+/// Sends the pasted link; the field clears for the next.
+const PINS_SCRIPT: &str = r#"const link = document.getElementById('link'), pin = document.getElementById('pin');
+const status = document.getElementById('status');
+link.addEventListener('input', () => { pin.disabled = !link.value.trim(); status.textContent = ''; });
+link.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !pin.disabled) pin.click(); });
+pin.addEventListener('click', async () => {
+  pin.disabled = true;
+  try {
+    const response = await fetch('pin', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: link.value.trim() });
+    const reply = await response.json();
+    if (reply.ok) { status.textContent = status.dataset.sent; link.value = ''; }
+    else { status.textContent = status.dataset.wrong; pin.disabled = false; }
+  } catch (error) { status.textContent = status.dataset.failed; pin.disabled = false; }
+});
+"#;
 
 /// Fits the chosen photo on the phone (cover, centred) and sends it as a JPEG.
 const PAGE_SCRIPT: &str = r#"const $ = (id) => document.getElementById(id);

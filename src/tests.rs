@@ -2347,3 +2347,72 @@ fn back_while_an_app_opens_stays_on_home_and_calls_the_launch_off() {
     state.home_key(true);
     assert!(state.queued.is_empty());
 }
+
+#[test]
+fn youtube_pins_fill_the_shelf_up_from_youtube_and_play_their_newest_video() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::{Card, Command, Response};
+    let mut state = ready();
+    let pin = |id: &str, title: &str| Pin {
+        kind: PinKind::Channel,
+        id: id.into(),
+        title: title.into(),
+        avatar: None,
+    };
+    let (news, telangana) = (
+        pin("UCJi8M0hRKjz8SLPvJKEVTOg", "ETV Andhra Pradesh"),
+        pin("UC6ickpgDIsltU_-8CbZaksQ", "ETV Telangana"),
+    );
+    // A resolved link is pinned once, saved, and its uploads asked for.
+    let effects = state.pins_response(Response::Resolved(Ok(news.clone())));
+    assert_eq!(
+        effects,
+        vec![
+            Effect::Save,
+            Effect::Pins(Command::Refresh(vec![news.clone()]))
+        ]
+    );
+    assert!(
+        state
+            .pins_response(Response::Resolved(Ok(news.clone())))
+            .is_empty()
+    );
+    assert!(state.notice.as_ref().unwrap().0.contains("already pinned"));
+    state.pins_response(Response::Resolved(Ok(telangana.clone())));
+    let card = |video: &str| Card {
+        video: video.into(),
+        title: format!("{video} title"),
+        published: "2026-11-27T07:53:51+00:00".into(),
+        image: None,
+    };
+    for (pin, video) in [(&news, "kJqrDRnWA9s"), (&telangana, "Py4TPP4OBeY")] {
+        state.pins_response(Response::Shelf {
+            pin: pin.key(),
+            cards: vec![card(video)],
+            avatar: None,
+        });
+    }
+    // A row for a pin no longer kept is dropped.
+    state.pins_response(Response::Shelf {
+        pin: "channel:UCxxxxxxxxxxxxxxxxxxxxxx".into(),
+        cards: vec![card("aaaaaaaaaaa")],
+        avatar: None,
+    });
+    assert_eq!(state.shelf_cards().len(), 2);
+    // Up from YouTube in the dock opens the shelf; Right, then OK plays that card's video.
+    state.focus = Target::App(crate::state::YOUTUBE.into());
+    state.direction(Direction::Up, &controls(&state));
+    assert!(state.shelf_open);
+    assert_eq!(state.focus, Target::Card(0));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Card(1));
+    assert_eq!(state.activate(), vec![Effect::Play("Py4TPP4OBeY".into())]);
+    // Down goes back to YouTube.
+    state.direction(Direction::Down, &controls(&state));
+    assert!(!state.shelf_open);
+    assert_eq!(state.focus, Target::App(crate::state::YOUTUBE.into()));
+    // Taking a pin off takes its row too.
+    assert_eq!(state.unpin(&news.key()), vec![Effect::Save]);
+    assert_eq!(state.shelf_cards().len(), 1);
+    assert_eq!(state.preferences.pins, vec![telangana]);
+}

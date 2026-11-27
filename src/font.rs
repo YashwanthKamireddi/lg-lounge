@@ -79,14 +79,24 @@ impl Font {
         None
     }
 
+    /// The font file itself, for the shaper (rustybuzz).
+    pub fn bytes(&self) -> &[u8] {
+        self.face.as_slice()
+    }
+
     pub fn geometry(&self, character: char) -> Result<Vec<Vertex>, String> {
+        self.glyph_geometry(self.lookup_glyph_index(character))
+    }
+
+    /// A glyph by its id in this font: what the shaper chose for a complex script.
+    pub fn glyph_geometry(&self, id: u16) -> Result<Vec<Vertex>, String> {
         let face = self.face.as_face_ref();
         let mut outline = GlyphOutline {
             builder: Path::builder(),
             scale: 1. / f32::from(face.units_per_em()),
             open: false,
         };
-        let glyph = GlyphId(self.lookup_glyph_index(character));
+        let glyph = GlyphId(id);
         if face.outline_glyph(glyph, &mut outline).is_none() {
             return Ok(Vec::new());
         }

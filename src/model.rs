@@ -167,6 +167,43 @@ pub enum Appearance {
     Auto,
 }
 
+/// The most pins kept: two rows of the shelf.
+pub const MAX_PINS: usize = 24;
+
+/// What a pin follows on YouTube.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub enum PinKind {
+    /// A channel's latest uploads.
+    Channel,
+    /// A playlist's latest additions.
+    Playlist,
+    /// One video.
+    Video,
+}
+
+/// Something the owner pinned from YouTube: its id there, and the name and picture shown for it.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct Pin {
+    pub kind: PinKind,
+    pub id: String,
+    pub title: String,
+    /// The channel's picture (https), for its tile.
+    #[serde(default)]
+    pub avatar: Option<String>,
+}
+
+impl Pin {
+    /// Unique across kinds: `channel:UC…`.
+    pub fn key(&self) -> String {
+        let kind = match self.kind {
+            PinKind::Channel => "channel",
+            PinKind::Playlist => "playlist",
+            PinKind::Video => "video",
+        };
+        format!("{kind}:{}", self.id)
+    }
+}
+
 /// The big clock over Home's wallpaper: digital (the Lock Screen's), an analog face, or none
 /// (the status pill then shows the time).
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -212,6 +249,9 @@ pub struct Preferences {
     pub appearance: Appearance,
     #[serde(deserialize_with = "lenient")]
     pub clock: ClockStyle,
+    /// YouTube channels, playlists and videos pinned from the phone, in order.
+    #[serde(deserialize_with = "lenient")]
+    pub pins: Vec<Pin>,
 }
 
 /// A value this Lounge does not know (written by a newer or older one) falls
@@ -256,6 +296,7 @@ impl Default for Preferences {
             avatar: None,
             appearance: Appearance::Dark,
             clock: ClockStyle::Digital,
+            pins: Vec::new(),
         }
     }
 }
@@ -297,6 +338,30 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        // Only ids YouTube could have given, once each, a shelf's worth at most.
+        let mut seen = HashSet::new();
+        self.pins.retain(|pin| {
+            let valid = match pin.kind {
+                PinKind::Channel => crate::youtube::is_channel_id(&pin.id),
+                PinKind::Video => crate::youtube::is_video_id(&pin.id),
+                PinKind::Playlist => crate::youtube::parse_link(&format!(
+                    "https://www.youtube.com/playlist?list={}",
+                    pin.id
+                ))
+                .is_some(),
+            };
+            valid && seen.insert(pin.key())
+        });
+        self.pins.truncate(MAX_PINS);
+        for pin in &mut self.pins {
+            pin.title = pin
+                .title
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(120)
+                .collect();
+            pin.avatar = pin.avatar.take().filter(|url| url.starts_with("https://"));
+        }
         // A photo wallpaper (crate::photo) is checked against the files once they are known.
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::photo::is_photo(&self.background)

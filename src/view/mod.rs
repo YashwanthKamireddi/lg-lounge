@@ -12,6 +12,7 @@ mod overlays;
 mod scene;
 mod settings;
 mod shared;
+mod shelf;
 mod switcher;
 mod theme;
 mod tile;

@@ -134,6 +134,9 @@ impl State {
                 effects.push(Effect::Save);
                 effects
             }
+            // The page stays open for the next link; the TV says when each is pinned.
+            Event::Pin(link) => vec![Effect::Pins(crate::pins_service::Command::Resolve(link))],
+            Event::Saved(Kind::Pins, _) => vec![],
             Event::Saved(Kind::Avatar, file) => {
                 self.preferences.avatar = Some(file);
                 let mut effects = self.close_phone();

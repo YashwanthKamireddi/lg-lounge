@@ -51,10 +51,21 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     } else {
         pill_shown(state)
     };
-    if big && clock_shown > 0. {
+    // The YouTube shelf takes the clock's place, the two crossfading.
+    let shelf = if state.page == Page::Apps {
+        state.shelf_shown()
+    } else {
+        0.
+    };
+    if big && clock_shown * (1. - shelf) > 0. {
         let first = out.draw.len();
         super::clock::big_clock(out, state, assets, now);
-        out.fade(first, clock_shown, 1.);
+        out.fade(first, clock_shown * (1. - shelf), 1.);
+    }
+    if shelf > 0. && clock_shown > 0. {
+        let first = out.draw.len();
+        super::shelf::shelf(out, state, assets, now);
+        out.fade(first, clock_shown * shelf, 1.);
     }
     let set = state.clock_set && !big;
     let (date_width, clock_width) = if set {

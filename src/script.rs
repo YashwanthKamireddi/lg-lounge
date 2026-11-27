@@ -44,6 +44,8 @@ pub(crate) fn script(
         }
         "await-search" => vec![],
         "await-weather" => vec![],
+        // Until every pin's row has come (the pins' worker fetches from YouTube).
+        "await-pins" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }

@@ -11,10 +11,49 @@ pub(super) fn embolden(physical_size: f32) -> f32 {
 
 /// The big clock's own figures (tools/font-weights.py), tall and narrow.
 pub(super) const CLOCK_FONT: u16 = 3000;
+/// Scripts the interface's font does not draw, each in its Noto cut, shaped (rustybuzz).
+const TELUGU_FONT: u16 = 3001;
+const DEVANAGARI_FONT: u16 = 3002;
+/// Shaped glyphs are cached by id under these private-use characters.
+const SHAPED_BASE: u32 = 0xF0000;
+
+/// The font a character's script needs, where the interface's own cannot draw it.
+fn script_font(c: char) -> Option<u16> {
+    match c as u32 {
+        0x0C00..=0x0C7F => Some(TELUGU_FONT),
+        0x0900..=0x097F | 0xA8E0..=0xA8FF => Some(DEVANAGARI_FONT),
+        _ => None,
+    }
+}
+
+/// A line split where its script changes: each run with the font it needs (None: the
+/// interface's). Joiners and spaces stay with the run they are in, so shaping sees whole words.
+fn script_runs(line: &str) -> Vec<(Option<u16>, String)> {
+    let mut runs: Vec<(Option<u16>, String)> = Vec::new();
+    for c in line.chars() {
+        let font = match script_font(c) {
+            Some(font) => Some(font),
+            // Spaces, joiners and marks continue the run they are in.
+            None if c.is_whitespace() || matches!(c as u32, 0x200C | 0x200D) => {
+                runs.last().and_then(|(font, _)| *font)
+            }
+            None => None,
+        };
+        match runs.last_mut() {
+            Some((last, text)) if *last == font => text.push(c),
+            _ => runs.push((font, c.to_string())),
+        }
+    }
+    runs
+}
 
 pub(super) fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
     let name = if id == CLOCK_FONT {
         "font-clock.ttf".to_owned()
+    } else if id == TELUGU_FONT {
+        "font-telugu.ttf".to_owned()
+    } else if id == DEVANAGARI_FONT {
+        "font-devanagari.ttf".to_owned()
     } else if id >= 1000 {
         format!("font-display-{}.ttf", id - 1000)
     } else {
@@ -63,7 +102,10 @@ impl Renderer {
     ) -> Result<&[lounge_vector_geometry::Vertex], String> {
         let key = (c, font);
         if !self.glyphs.contains_key(&key) {
-            let geometry = self.fonts[&font].geometry(c)?;
+            let geometry = match (c as u32).checked_sub(SHAPED_BASE) {
+                Some(id) => self.fonts[&font].glyph_geometry(id as u16)?,
+                None => self.fonts[&font].geometry(c)?,
+            };
             self.glyphs.insert(
                 key,
                 Glyph {
@@ -229,7 +271,13 @@ impl Renderer {
             self.stats.glyph_failures += text.chars().count();
             return;
         }
+        let mut scripts: Vec<u16> = text.chars().filter_map(script_font).collect();
+        scripts.dedup();
+        for script in scripts {
+            self.ensure_font(script);
+        }
         let font = &self.fonts[&font_id];
+        let fonts = &self.fonts;
         let line_height = size_f * style.line_height;
         let baseline = font.horizontal_line_metrics(size_f).map_or(size_f, |m| {
             (line_height - m.ascent + m.descent) / 2. + m.ascent
@@ -238,6 +286,9 @@ impl Renderer {
         let advance = |c| {
             if c == '\n' {
                 0.
+            } else if let Some(script) = script_font(c).and_then(|id| fonts.get(&id)) {
+                // Near enough to wrap by: shaping only joins letters into fewer glyphs.
+                script.metrics(c, size_f).advance_width
             } else {
                 font.metrics(c, size_f).advance_width + tracking
             }
@@ -279,18 +330,49 @@ impl Renderer {
             if index > 0 && top + line_height > rect.y + rect.h + 1. {
                 break;
             }
-            let mut previous = None;
-            let width: f32 = line
-                .chars()
-                .map(|c| {
-                    let kern = previous
-                        .and_then(|p| font.horizontal_kern(p, c, size_f))
-                        .unwrap_or(0.);
-                    previous = Some(c);
-                    advance(c) + kern
-                })
-                .sum();
-            let mut x = rect.x
+            // Laid out from 0, then moved into place once its width is known.
+            let mut line_glyphs = Vec::new();
+            let mut x = 0.;
+            for (script, run) in script_runs(line) {
+                match script.and_then(|id| fonts.get(&id).map(|face| (id, face))) {
+                    Some((id, face)) => {
+                        // Shaped: conjuncts, vowel signs and reordering as the script needs.
+                        let Some(shaper) = rustybuzz::Face::from_slice(face.bytes(), 0) else {
+                            continue;
+                        };
+                        let mut buffer = rustybuzz::UnicodeBuffer::new();
+                        buffer.push_str(&run);
+                        let output = rustybuzz::shape(&shaper, &[], buffer);
+                        let scale = size_f / f32::from(shaper.units_per_em() as u16);
+                        for (info, position) in
+                            output.glyph_infos().iter().zip(output.glyph_positions())
+                        {
+                            let key =
+                                char::from_u32(SHAPED_BASE + info.glyph_id).unwrap_or('\u{FFFD}');
+                            line_glyphs.push((
+                                key,
+                                id,
+                                x + position.x_offset as f32 * scale,
+                                -(position.y_offset as f32) * scale,
+                            ));
+                            x += position.x_advance as f32 * scale;
+                        }
+                    }
+                    None => {
+                        let mut previous = None;
+                        for c in run.chars() {
+                            if let Some(previous) = previous {
+                                x += font.horizontal_kern(previous, c, size_f).unwrap_or(0.);
+                            }
+                            line_glyphs.push((c, font_id, x, 0.));
+                            x += advance(c);
+                            previous = Some(c);
+                        }
+                    }
+                }
+            }
+            let width = x;
+            let shift = rect.x
                 + if style.align_right {
                     rect.w - width
                 } else if centered {
@@ -298,25 +380,22 @@ impl Renderer {
                 } else {
                     0.
                 };
-            let mut previous = None;
-            for c in line.chars() {
-                if let Some(previous) = previous {
-                    x += font.horizontal_kern(previous, c, size_f).unwrap_or(0.);
-                }
-                placed.push((c, x, top + baseline));
-                x += advance(c);
-                previous = Some(c);
+            for (c, id, x, rise) in line_glyphs {
+                placed.push((c, id, shift + x, top + baseline + rise));
             }
         }
         let mut vertices = Vec::new();
         let mut missing_glyphs = 0;
         let mut failures = 0;
         let multisampled = self.stats.multisample_samples > 1;
-        for (c, x, baseline) in placed {
-            if self.fonts[&font_id].lookup_glyph_index(c) == 0 && !c.is_whitespace() {
+        for (c, glyph_font, x, baseline) in placed {
+            if glyph_font == font_id
+                && self.fonts[&font_id].lookup_glyph_index(c) == 0
+                && !c.is_whitespace()
+            {
                 missing_glyphs += 1;
             }
-            match self.glyph(c, font_id) {
+            match self.glyph(c, glyph_font) {
                 Ok(geometry) => {
                     for triangle in geometry.as_chunks::<3>().0 {
                         // True sample coverage needs only the original fill.
