@@ -128,6 +128,9 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         );
     }
     if let Some(value) = row.value {
+        // A long value (a photo's name) ends with an ellipsis in its space rather than running
+        // left into the title.
+        let value = fit_line(assets, value, row_style(), 224.).into_owned();
         out.text(
             value,
             Rect::new(
@@ -155,6 +158,26 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         );
     }
     out.control(row.target, row.rect, true);
+}
+
+/// `text` on one line within `width`, shortened with an ellipsis if it does not fit.
+fn fit_line<'a>(
+    assets: &Assets,
+    text: &'a str,
+    style: crate::renderer::TextStyle,
+    width: f32,
+) -> std::borrow::Cow<'a, str> {
+    if assets.width(text, style) <= width {
+        return text.into();
+    }
+    let mut chars: Vec<char> = text.chars().collect();
+    while chars.pop().is_some() {
+        let candidate = format!("{}…", chars.iter().collect::<String>().trim_end());
+        if assets.width(&candidate, style) <= width {
+            return candidate.into();
+        }
+    }
+    "…".into()
 }
 
 fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
