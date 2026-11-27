@@ -205,7 +205,8 @@ const SWITCHER_VEIL: f32 = 0.38;
 /// The grid's backdrop tint, the same clear, dimmed glass in both appearances.
 const GRID_TINT: Color = [GRID_VEIL, GRID_VEIL, GRID_VEIL + 0.02, 1.];
 
-/// The pictures Home shows at rest: the dock's Top Shelf art (or the wallpaper) and its glass.
+/// The pictures Home shows at rest: the dock's Top Shelf art (or the wallpaper) and its glass,
+/// and the pinned shelf's.
 /// The renderer keeps them on the GPU while the grid or Settings covers them.
 pub fn resident(state: &State, assets: &Assets) -> Vec<String> {
     let (picture, glass) = glass::shelf_art(state, assets, state.shelf_app.as_deref());
@@ -218,6 +219,12 @@ pub fn resident(state: &State, assets: &Assets) -> Vec<String> {
         if !keep.contains(&path) {
             keep.push(path);
         }
+    }
+    // The shelf's pictures too, whichever app it is for: back from the grid it shows at once,
+    // not blank while they go up again.
+    for row in state.shelf.values() {
+        let shown = row.cards.first().and_then(|card| card.image.clone());
+        keep.extend(shown.into_iter().chain(row.avatar.clone()));
     }
     keep
 }
