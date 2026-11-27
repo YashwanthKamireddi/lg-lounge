@@ -72,7 +72,12 @@ impl Client {
             .header("User-Agent", "Mozilla/5.0 (Lounge)")
             .header("Accept-Language", "en")
             .call()
-            .map_err(|_| "YouTube is unavailable. Try again shortly.")?;
+            // ureq answers a 4xx/5xx as an error: a link to nothing (404, 410) must say so, not
+            // send someone to try a dead link again later.
+            .map_err(|error| match error {
+                ureq::Error::StatusCode(404 | 410) => "YouTube did not find that link.",
+                _ => "YouTube is unavailable. Try again shortly.",
+            })?;
         if !response.status().is_success() {
             return Err("YouTube did not find that link.".into());
         }
