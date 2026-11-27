@@ -2581,3 +2581,36 @@ fn a_pin_in_settings_moves_to_the_front_or_is_removed_cancel_focused() {
     assert_eq!(state.focus, Target::Choice(0));
     assert!(state.notice.as_ref().unwrap().0.contains("Bhakthi TV"));
 }
+
+#[test]
+fn the_analog_sweep_stops_while_the_shelf_covers_the_clock() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::{Card, Response};
+    let mut state = ready();
+    state.preferences.clock = crate::model::ClockStyle::Analog;
+    state.preferences.reduced_motion = true;
+    assert!(state.ticking(), "the face sweeps on Home");
+    let pin = Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    };
+    state.preferences.pins.push(pin.clone());
+    state.pins_response(Response::Shelf {
+        pin: pin.key(),
+        cards: vec![Card {
+            video: "kJqrDRnWA9s".into(),
+            title: "News".into(),
+            published: String::new(),
+            image: None,
+        }],
+        avatar: None,
+    });
+    state.focus = Target::App(crate::state::YOUTUBE.into());
+    state.tick();
+    assert!(!state.ticking(), "the shelf has taken the clock's place");
+    state.focus = Target::App("netflix".into());
+    state.tick();
+    assert!(state.ticking(), "the clock is back");
+}
