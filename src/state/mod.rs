@@ -194,8 +194,7 @@ pub enum Overlay {
         id: String,
         restore: Target,
     },
-    /// The same alert before taking a pin off the shelf (its `Pin::key`): Remove over Cancel,
-    /// Cancel focused.
+    /// A pin's own alert (its `Pin::key`): Move to Front, Remove, Cancel; Cancel focused.
     Unpin {
         key: String,
         restore: Target,

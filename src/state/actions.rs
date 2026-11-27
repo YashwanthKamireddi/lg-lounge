@@ -321,8 +321,8 @@ impl State {
                             key: pin.key(),
                             restore: Target::Choice(index),
                         });
-                        // Cancel is where focus lands: OK pressed twice never removes a pin.
-                        self.focus = Target::Alert(1);
+                        // Cancel is where focus lands: OK pressed twice never changes a pin.
+                        self.focus = Target::Alert(2);
                         self.pointer = false;
                         self.pressed = None;
                         self.panel_started =
@@ -399,7 +399,28 @@ impl State {
                 }
                 return vec![];
             }
+            // Move to Front: first on the shelf, focus with it at the top of the list.
             Target::Alert(0) if matches!(self.overlay, Some(Overlay::Unpin { .. })) => {
+                let Some(Overlay::Unpin { key, .. }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                let Some(at) = self
+                    .preferences
+                    .pins
+                    .iter()
+                    .position(|pin| pin.key() == key)
+                else {
+                    return vec![];
+                };
+                let pin = self.preferences.pins.remove(at);
+                self.preferences.pins.insert(0, pin);
+                self.focus = Target::Choice(0);
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
+            // Remove.
+            Target::Alert(1) if matches!(self.overlay, Some(Overlay::Unpin { .. })) => {
                 let Some(Overlay::Unpin { key, restore }) = self.overlay.take() else {
                     return vec![];
                 };

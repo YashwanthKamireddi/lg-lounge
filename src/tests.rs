@@ -2529,7 +2529,7 @@ fn the_pointer_moving_onto_a_shelf_card_keeps_the_shelf() {
 }
 
 #[test]
-fn removing_a_pin_in_settings_asks_first_with_cancel_focused() {
+fn a_pin_in_settings_moves_to_the_front_or_is_removed_cancel_focused() {
     use crate::model::{Pin, PinKind};
     use crate::state::{Overlay, Subpage};
     let mut state = ready();
@@ -2544,35 +2544,40 @@ fn removing_a_pin_in_settings_asks_first_with_cancel_focused() {
             avatar: None,
         });
     }
+    let titles = |state: &State| -> Vec<String> {
+        state
+            .preferences
+            .pins
+            .iter()
+            .map(|pin| pin.title.clone())
+            .collect()
+    };
     state.open(2);
     state.section = crate::state::HOME_SECTION;
     state.focus = Target::Setting(14);
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::Pins));
-    // OK on a pin asks; nothing is removed yet, and Cancel is focused.
-    state.focus = Target::Choice(0);
+    // OK on a pin opens its alert; nothing changes yet, and Cancel is focused.
+    state.focus = Target::Choice(1);
     assert!(state.activate().is_empty());
     assert!(matches!(state.overlay, Some(Overlay::Unpin { .. })));
-    assert_eq!(state.focus, Target::Alert(1));
-    assert_eq!(state.preferences.pins.len(), 2);
-    // Cancel (OK on it, or Back) keeps it.
+    assert_eq!(state.focus, Target::Alert(2));
+    // Cancel keeps everything as it was.
     state.activate();
     assert!(state.overlay.is_none());
-    assert_eq!(state.preferences.pins.len(), 2);
-    assert_eq!(state.focus, Target::Choice(0));
-    // Remove takes it off; focus takes the row now in its place.
+    assert_eq!(titles(&state), ["ETV Andhra Pradesh", "Bhakthi TV"]);
+    assert_eq!(state.focus, Target::Choice(1));
+    // Move to Front: Bhakthi TV first, focus with it.
     state.activate();
     state.focus = Target::Alert(0);
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.pins.len(), 1);
-    assert_eq!(state.preferences.pins[0].title, "Bhakthi TV");
+    assert_eq!(titles(&state), ["Bhakthi TV", "ETV Andhra Pradesh"]);
     assert_eq!(state.focus, Target::Choice(0));
-    assert!(
-        state
-            .notice
-            .as_ref()
-            .unwrap()
-            .0
-            .contains("ETV Andhra Pradesh")
-    );
+    // Remove takes it off; focus takes the row now in its place.
+    state.activate();
+    state.focus = Target::Alert(1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(titles(&state), ["ETV Andhra Pradesh"]);
+    assert_eq!(state.focus, Target::Choice(0));
+    assert!(state.notice.as_ref().unwrap().0.contains("Bhakthi TV"));
 }
