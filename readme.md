@@ -58,16 +58,44 @@ that webOS itself reads, and every part is removed again when Lounge as Home is 
   points at Lounge is mounted instead.
 - **Resuming, not restarting.** Lounge registers with sam's app lifecycle (`registerApp`), so a
   Home press raises the running instance instead of starting a new one.
-- **Cold boot.** webOS opens the last input as soon as its core boot is done, long before
-  Homebrew Channel's boot hooks run. Lounge registers a small root service,
-  `lounge-early`, in `/var/luna-service2`, which webOS loads at core-boot-done, plus a key filter
-  in the compositor. While the TV boots, the filter calls the service, which mounts Lounge and
-  stops the Home webOS restored from its snapshot. The filter then opens Home over the first
-  input, so Lounge is the first screen after LG's logo. If any part fails, the Homebrew hook
-  takes over later in the boot as before.
+- **Cold boot.** webOS's boot manager launches the app named in eim's last-input record
+  (`/var/lib/eim/lastinput`, `physicalLastSourceAppId`) before anything else. Lounge names Home
+  there when it becomes Home, at each boot and as the TV powers off, leaving eim's own record of
+  the input untouched, so the boot opens Home and never an input. A small root service,
+  `lounge-early`, registered in `/var/luna-service2` and loaded at core-boot-done, mounts Lounge
+  early, called from a key filter in the compositor. If any part fails, the Homebrew hook takes
+  over later in the boot.
+- **Waking from standby.** With Quick Start+ the TV wakes without booting and webOS reopens the
+  last input. The same compositor filter sees the power state go from standby to active and
+  opens Home over it, as LG's Home does when "Home Auto Launch" is on.
+- **Screen saver.** webOS draws its screen saver from a QML file in
+  `com.webos.app.screensaver`. While Lounge is Home, its own analog clock (`tv/screensaver.qml`)
+  is bound over that file: Qt's render thread sweeps the second hand, and the clock drifts slowly
+  so no pixel holds the image. A saver another integration mounted is left alone.
 - **Staying safe.** Three failed starts within a minute hand Home back to LG. Turning Lounge as
-  Home off from the remote removes the mount, the service, the filter and the hook. Uninstalling
-  Lounge and restarting the TV does the same.
+  Home off from the remote removes the mount, the service, the filter, the screen saver and the
+  hook, and gives the boot its input back. Uninstalling Lounge and restarting the TV does the
+  same.
+
+## Pinned YouTube channels
+
+Above the dock, where the clock is, a focused app can show its own content, as Apple TV's Top
+Shelf does. For YouTube that is the newest video of each pinned channel, playlist or video, with
+its thumbnail, the channel's picture and a badge while it is live; OK plays it at once through
+the YouTube app's own `contentTarget` launch parameter.
+
+- **No account.** A worker reads YouTube's public Atom feeds and channel pages; nothing is
+  signed in and no API key is involved. It refreshes while Home is on screen and never behind an
+  app, and keeps the thumbnails on the TV, dropping those no pin shows any more.
+- **Pinning.** A link pasted on the phone (the same QR page as photos) is resolved on the TV:
+  a handle to its channel, a video to its title. Pins are removed in Settings.
+
+## Text in every script
+
+Interface text is drawn from vector outlines in SF Pro or Inter. Telugu and Devanagari, which
+those fonts do not cover, are shaped with rustybuzz (a Rust port of HarfBuzz) in Noto Sans, so
+conjuncts and vowel signs are placed as the script requires: channel names and video titles read
+as they should.
 
 ## Photos from a phone
 
@@ -80,7 +108,8 @@ when the code closes.
 ## Testing
 
 - **Unit tests** cover state, navigation, the Home takeover (against a model of webOS: mounts,
-  processes, sam and configd), the photo pipeline and the phone server.
+  processes, sam and configd), the photo pipeline, the phone server, and YouTube links and feeds
+  (against a saved real feed).
 - **Headless render tests** run every screen in the native renderer under a headless compositor.
   Each has a budget for screen fill, artwork and text memory; a change that exceeds one fails.
 - **On the TV**, `tools/tv-bench.sh` measures frame pacing per scenario.
@@ -93,9 +122,10 @@ with an elevated [Homebrew Channel](https://www.webosbrew.org/) is required.
 
 ## Privacy
 
-No telemetry, no accounts and no log files unless `/var/lib/lounge/debug` exists. The only
-network requests are for the weather (Open-Meteo, OpenStreetMap). The phone server listens only
-while its QR code is on screen.
+No telemetry, no accounts and no log files unless `/var/lib/lounge/debug` exists. Network
+requests go only to the weather (Open-Meteo, OpenStreetMap) and, for pinned channels, to
+YouTube's public feeds, pages and thumbnails. The phone server listens only while its QR code
+is on screen.
 
 ## Build and install
 
