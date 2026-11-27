@@ -2677,3 +2677,22 @@ fn a_settings_page_reached_from_a_row_explains_that_row() {
     state.subpage = Some(crate::state::Subpage::Pins);
     assert!(!caption(&state).contains("remove"));
 }
+
+#[test]
+fn weather_on_with_no_place_says_what_it_needs() {
+    let mut state = ready();
+    state.page = Page::Settings;
+    state.section = crate::state::WEATHER_SECTION;
+    state.focus = Target::WeatherToggle;
+    state.preferences.weather_location = None;
+    state.preferences.show_weather = true;
+    let needs = |state: &State| {
+        ui_text(state)
+            .iter()
+            .any(|line| line.starts_with("Choose a place"))
+    };
+    assert!(needs(&state));
+    // Off, nothing is missing.
+    state.preferences.show_weather = false;
+    assert!(!needs(&state));
+}
