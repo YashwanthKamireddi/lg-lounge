@@ -366,7 +366,6 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
         root: PathBuf::new(),
         icons: Default::default(),
         colors: Default::default(),
-        version: "test".into(),
         metrics: Default::default(),
         tiles: Default::default(),
         heroes: Default::default(),

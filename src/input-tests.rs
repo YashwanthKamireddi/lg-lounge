@@ -38,7 +38,6 @@ fn assets() -> view::Assets {
         root: PathBuf::new(),
         icons: BTreeMap::new(),
         colors: BTreeMap::new(),
-        version: "test".into(),
         metrics: BTreeMap::new(),
         tiles: Default::default(),
         heroes: Default::default(),

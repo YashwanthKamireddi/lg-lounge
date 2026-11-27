@@ -26,7 +26,7 @@ use crate::{
 };
 use glass::{shelf_art, shelf_dissolve};
 use home::library;
-use overlays::{footer, header, inputs_panel, options, toast};
+use overlays::{header, inputs_panel, move_hint, options, toast};
 use settings::settings;
 use shared::{c, detail_style};
 use std::{
@@ -60,7 +60,6 @@ pub struct Assets {
     pub root: PathBuf,
     pub icons: BTreeMap<String, String>,
     pub colors: BTreeMap<String, [u8; 3]>,
-    pub version: String,
     pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
     pub artwork: crate::app_artwork::Service,
     pub tiles: BTreeMap<String, [u8; 3]>,
@@ -86,7 +85,6 @@ impl Assets {
         } else {
             serde_json::from_slice(&load("colors.json")?).map_err(|e| e.to_string())?
         };
-        let version = String::from_utf8(load("version.txt")?).map_err(|e| e.to_string())?;
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
         let tiles = std::fs::read(root.join("tiles.json"))
@@ -102,7 +100,6 @@ impl Assets {
             root,
             icons,
             colors,
-            version,
             metrics,
             artwork: crate::app_artwork::Service::new(webos),
             tiles,
@@ -472,7 +469,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         if state.page != Page::Settings {
             header(&mut out, state, assets, now);
         }
-        footer(&mut out, state, assets);
+        move_hint(&mut out, state, assets);
         // The pill fades with its page: it came back whole on the first frame.
         if let Some((_, eased, _)) = page_t {
             out.fade(content, eased, 1.);
