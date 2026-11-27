@@ -34,8 +34,8 @@ pub fn section_settings(section: usize) -> &'static [usize] {
     match section {
         // Clock format, Lounge as Home, Hidden apps, Quit.
         GENERAL_SECTION => &[1, 10, 7, 5],
-        // Clock, YouTube pins, appearance, app names, cover art, profile picture.
-        HOME_SECTION => &[13, 14, 9, 0, 6, 8],
+        // Clock, screen saver, YouTube pins, appearance, app names, cover art, profile picture.
+        HOME_SECTION => &[13, 15, 14, 9, 0, 6, 8],
         // Larger names, focus outline, reduced motion.
         ACCESS_SECTION => &[12, 11, 2],
         _ => &[],
@@ -211,6 +211,8 @@ pub enum Overlay {
 pub enum Subpage {
     Clock,
     BigClock,
+    /// The screen saver's face.
+    Saver,
     /// The YouTube pins, and adding one from the phone.
     Pins,
     WeatherLocation,
@@ -471,6 +473,12 @@ pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// The appearance choices, in Settings' order (as tvOS lists them).
 pub const APPEARANCES: [Appearance; 3] = [Appearance::Light, Appearance::Dark, Appearance::Auto];
+pub const SAVER_FACES: [crate::model::SaverFace; 4] = [
+    crate::model::SaverFace::Analog,
+    crate::model::SaverFace::Digital,
+    crate::model::SaverFace::Modular,
+    crate::model::SaverFace::Numerals,
+];
 pub const CLOCK_STYLES: [crate::model::ClockStyle; 3] = [
     crate::model::ClockStyle::Digital,
     crate::model::ClockStyle::Analog,
@@ -670,6 +678,34 @@ impl State {
         };
         self.notice = Some((text.into(), start));
         self.dirty = true;
+    }
+
+    /// What the screen saver reads as it starts (tv/screensaver.qml): its face, the clock format
+    /// and the weather in words.
+    pub fn saver_settings(&self) -> String {
+        let weather = self
+            .preferences
+            .weather_location
+            .as_ref()
+            .filter(|_| self.preferences.show_weather)
+            .and_then(|place| self.weather.reading(place))
+            .map(|reading| {
+                format!(
+                    "{} · {}",
+                    i18n::t(weather::condition(reading).key),
+                    weather::format_temperature(
+                        reading.temperature,
+                        self.preferences.temperature_unit
+                    )
+                )
+            })
+            .unwrap_or_default();
+        serde_json::json!({
+            "face": self.preferences.saver.name(),
+            "hour24": self.hour_24,
+            "weather": weather,
+        })
+        .to_string()
     }
 
     pub fn tick(&mut self) {

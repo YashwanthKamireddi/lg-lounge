@@ -399,6 +399,15 @@ fn appearance_label(appearance: Appearance) -> (&'static str, Option<&'static st
     }
 }
 
+fn saver_label(face: crate::model::SaverFace) -> (&'static str, &'static str) {
+    match face {
+        crate::model::SaverFace::Analog => ("saverAnalog", "saverAnalogDetail"),
+        crate::model::SaverFace::Digital => ("saverDigital", "saverDigitalDetail"),
+        crate::model::SaverFace::Modular => ("saverModular", "saverModularDetail"),
+        crate::model::SaverFace::Numerals => ("saverNumerals", "saverNumeralsDetail"),
+    }
+}
+
 fn clock_label(style: crate::model::ClockStyle) -> &'static str {
     match style {
         crate::model::ClockStyle::Digital => "clockDigital",
@@ -511,6 +520,12 @@ fn section_rows(state: &State, section: usize) -> Vec<RowSpec> {
                     on_off(state.preferences.focus_outline),
                     false,
                 ),
+                15 => spec(
+                    15,
+                    "screenSaver",
+                    Some(i18n::t(saver_label(state.preferences.saver).0).to_owned()),
+                    true,
+                ),
                 14 => spec(
                     14,
                     "youtubePins",
@@ -557,6 +572,7 @@ pub(super) fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         (_, true) => i18n::t("settings"),
         (Some(Subpage::Clock), _) => i18n::t("clockFormat"),
         (Some(Subpage::BigClock), _) => i18n::t("bigClock"),
+        (Some(Subpage::Saver), _) => i18n::t("screenSaver"),
         (Some(Subpage::Pins), _) => i18n::t("youtubePins"),
         (Some(Subpage::Appearance), _) => i18n::t("appearance"),
         (Some(Subpage::Hidden), _) => i18n::t("hiddenApps"),
@@ -853,6 +869,17 @@ fn settings_list(out: &mut Scene, state: &State, assets: &Assets) {
                     Some(i18n::t("pinsAddDetail")),
                     false,
                 )))
+                .collect(),
+            Subpage::Saver => crate::state::SAVER_FACES
+                .iter()
+                .map(|face| {
+                    let (title, detail) = saver_label(*face);
+                    (
+                        i18n::t(title),
+                        Some(i18n::t(detail)),
+                        state.preferences.saver == *face,
+                    )
+                })
                 .collect(),
             Subpage::BigClock => crate::state::CLOCK_STYLES
                 .iter()

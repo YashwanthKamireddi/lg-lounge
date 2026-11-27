@@ -61,6 +61,7 @@ impl State {
         self.focus = match self.subpage.take() {
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::BigClock) => Target::Setting(13),
+            Some(Subpage::Saver) => Target::Setting(15),
             Some(Subpage::Pins) => Target::Setting(14),
             Some(Subpage::WeatherLocation) => Target::WeatherLocation,
             Some(Subpage::Temperature) => Target::WeatherTemperature,
@@ -238,6 +239,7 @@ impl State {
                 let count = match self.subpage {
                     Some(Subpage::Clock | Subpage::Temperature) => 2,
                     Some(Subpage::BigClock) => CLOCK_STYLES.len(),
+                    Some(Subpage::Saver) => SAVER_FACES.len(),
                     Some(Subpage::Pins) => self.preferences.pins.len() + 1,
                     Some(Subpage::Appearance) => APPEARANCES.len(),
                     Some(Subpage::Hidden) => self.hidden_count().max(1),
