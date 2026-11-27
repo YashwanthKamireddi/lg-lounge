@@ -2791,3 +2791,20 @@ fn a_focused_grid_row_keeps_its_name_inside_the_safe_area() {
         );
     }
 }
+
+#[test]
+fn settings_lists_stop_at_their_last_item_instead_of_wrapping() {
+    let mut state = ready();
+    state.open(2);
+    // The sections: Down past Weather stays on Weather.
+    state.focus = Target::Sidebar(crate::state::WEATHER_SECTION);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(crate::state::WEATHER_SECTION));
+    // A page's list: the last choice stays the last, never the first again.
+    state.section = crate::state::HOME_SECTION;
+    state.subpage = Some(crate::state::Subpage::Saver);
+    let last = crate::state::SAVER_FACES.len() - 1;
+    state.focus = Target::Choice(last);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(last));
+}

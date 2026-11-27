@@ -211,7 +211,11 @@ impl State {
                         },
                         controls,
                     ),
-                    Direction::Down => self.focus(Target::Choice((index + 1) % count), controls),
+                    // A list stops at its last item, as tvOS lists do; wrapping to the top read as a
+                    // jump, and Up already stopped at the top.
+                    Direction::Down => {
+                        self.focus(Target::Choice((index + 1).min(count - 1)), controls)
+                    }
                     Direction::Right => {}
                 }
                 return vec![];
@@ -230,9 +234,10 @@ impl State {
                         },
                         controls,
                     ),
-                    Direction::Down => {
-                        self.focus(Target::Sidebar((index + 1) % SECTION_COUNT), controls)
-                    }
+                    Direction::Down => self.focus(
+                        Target::Sidebar((index + 1).min(SECTION_COUNT - 1)),
+                        controls,
+                    ),
                     Direction::Left => {}
                 }
                 return vec![];
