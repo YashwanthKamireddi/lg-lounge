@@ -177,7 +177,7 @@ impl Harness {
                     }
                 }
                 // The shelf and its fetches: no pins in these runs.
-                Effect::Play(video) => panic!("{what} played {video} with no pins"),
+                Effect::Open(app, _) => panic!("{what} opened {app} with no pins"),
                 Effect::Pins(_) => {}
                 Effect::Running => {
                     let mut open: Vec<String> = self

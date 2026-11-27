@@ -2398,15 +2398,22 @@ fn youtube_pins_fill_the_shelf_up_from_youtube_and_play_their_newest_video() {
         cards: vec![card("aaaaaaaaaaa")],
         avatar: None,
     });
-    assert_eq!(state.shelf_cards().len(), 2);
-    // Up from YouTube in the dock opens the shelf; Right, then OK plays that card's video.
+    // Focused, YouTube shows its shelf: the two kept pins.
     state.focus = Target::App(crate::state::YOUTUBE.into());
+    assert_eq!(state.shelf_cards().len(), 2);
+    // Up moves into it; Right, then OK plays that card's video.
     state.direction(Direction::Up, &controls(&state));
     assert!(state.shelf_open);
     assert_eq!(state.focus, Target::Card(0));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Card(1));
-    assert_eq!(state.activate(), vec![Effect::Play("Py4TPP4OBeY".into())]);
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Open(
+            crate::state::YOUTUBE.into(),
+            crate::youtube::launch_params("Py4TPP4OBeY")
+        )]
+    );
     // Down goes back to YouTube.
     state.direction(Direction::Down, &controls(&state));
     assert!(!state.shelf_open);
@@ -2415,4 +2422,53 @@ fn youtube_pins_fill_the_shelf_up_from_youtube_and_play_their_newest_video() {
     assert_eq!(state.unpin(&news.key()), vec![Effect::Save]);
     assert_eq!(state.shelf_cards().len(), 1);
     assert_eq!(state.preferences.pins, vec![telangana]);
+}
+
+#[test]
+fn a_jiohotstar_show_pin_is_on_jiohotstar_s_shelf_and_opens_the_show() {
+    use crate::model::{App, Pin, PinKind};
+    use crate::pins_service::{Card, Response};
+    let mut state = ready();
+    let mut inventory = demo_inventory();
+    inventory
+        .apps
+        .insert(1, App::new(crate::hotstar::APP, "JioHotstar"));
+    state.set_inventory(inventory, None);
+    state.preferences.favorites = Some(vec![
+        crate::hotstar::APP.into(),
+        crate::state::YOUTUBE.into(),
+    ]);
+    let show = Pin {
+        kind: PinKind::Show,
+        id: "in/shows/bigg-boss/14714".into(),
+        title: "Bigg Boss Telugu".into(),
+        avatar: None,
+    };
+    state.preferences.pins.push(show.clone());
+    state.pins_response(Response::Shelf {
+        pin: show.key(),
+        cards: vec![Card {
+            video: show.id.clone(),
+            title: show.title.clone(),
+            published: String::new(),
+            image: None,
+        }],
+        avatar: None,
+    });
+    // On YouTube's shelf it is not; focused, JioHotstar shows it.
+    state.focus = Target::App(crate::state::YOUTUBE.into());
+    assert!(state.shelf_cards().is_empty());
+    state.focus = Target::App(crate::hotstar::APP.into());
+    assert!(state.shelf_visible());
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Card(0));
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Open(
+            crate::hotstar::APP.into(),
+            json!({ "contentTarget": "https://livingroom.hotstar.com/in/shows/bigg-boss/14714" })
+        )]
+    );
+    state.back();
+    assert_eq!(state.focus, Target::App(crate::hotstar::APP.into()));
 }

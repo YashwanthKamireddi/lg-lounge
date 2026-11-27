@@ -233,8 +233,8 @@ pub enum Effect {
     Save,
     Refresh,
     Launch(String),
-    /// Play a YouTube video (its id) in the TV's YouTube app.
-    Play(String),
+    /// Open an app with launch parameters: a pinned YouTube video, a JioHotstar show.
+    Open(String, serde_json::Value),
     /// Resolve a pasted link, or bring the pins' uploads up to date.
     Pins(crate::pins_service::Command),
     /// Ask webOS which apps are open, for the app switcher.
@@ -427,6 +427,8 @@ pub struct State {
     pub shelf_changed: Option<Instant>,
     /// Whether it showed on the last frame (`State::track_shelf`).
     pub shelf_was_visible: bool,
+    /// The dock app the open shelf belongs to.
+    pub shelf_owner: Option<String>,
     /// The arrow being handled is a held key's repeat: it stops at edges.
     pub held: bool,
     /// When Top Shelf mode last began; its chevron bobs for a moment.
@@ -599,6 +601,7 @@ impl State {
             shelf_open: false,
             shelf_changed: None,
             shelf_was_visible: false,
+            shelf_owner: None,
             held: false,
             shelf_since: Some(crate::clock::now()),
             shelf_app: None,

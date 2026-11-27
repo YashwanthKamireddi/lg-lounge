@@ -402,13 +402,7 @@ impl State {
                 return vec![Effect::Uninstall(id)];
             }
             Target::Alert(_) => return self.back(),
-            Target::Card(index) => {
-                return self
-                    .shelf_cards()
-                    .get(index)
-                    .map(|card| vec![Effect::Play(card.card.video.clone())])
-                    .unwrap_or_default();
-            }
+            Target::Card(index) => return self.open_card(index),
             Target::InputsButton => {
                 let first = self.input_choices().into_iter().next();
                 if let Some((id, ..)) = first {

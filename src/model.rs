@@ -170,7 +170,7 @@ pub enum Appearance {
 /// The most pins kept: two rows of the shelf.
 pub const MAX_PINS: usize = 24;
 
-/// What a pin follows on YouTube.
+/// What a pin follows: on YouTube, or a JioHotstar show.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub enum PinKind {
     /// A channel's latest uploads.
@@ -179,6 +179,8 @@ pub enum PinKind {
     Playlist,
     /// One video.
     Video,
+    /// A JioHotstar show (`id`: its path, `in/shows/<name>/<id>`), opened on its own page.
+    Show,
 }
 
 /// Something the owner pinned from YouTube: its id there, and the name and picture shown for it.
@@ -199,8 +201,17 @@ impl Pin {
             PinKind::Channel => "channel",
             PinKind::Playlist => "playlist",
             PinKind::Video => "video",
+            PinKind::Show => "show",
         };
         format!("{kind}:{}", self.id)
+    }
+
+    /// The app it opens in, whose shelf it is on.
+    pub fn app(&self) -> &'static str {
+        match self.kind {
+            PinKind::Show => crate::hotstar::APP,
+            PinKind::Channel | PinKind::Playlist | PinKind::Video => crate::state::YOUTUBE,
+        }
     }
 }
 
@@ -349,6 +360,10 @@ impl Preferences {
                     pin.id
                 ))
                 .is_some(),
+                PinKind::Show => {
+                    crate::hotstar::parse_show(&format!("https://www.hotstar.com/{}", pin.id))
+                        .is_some_and(|path| path == pin.id)
+                }
             };
             valid && seen.insert(pin.key())
         });
