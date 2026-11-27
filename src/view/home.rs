@@ -550,7 +550,8 @@ fn shelf_chevron(out: &mut Scene, state: &State, assets: &Assets, dock_y: f32) {
     if !in_dock || !state.has_art(id) || state.expanded {
         return;
     }
-    let alpha = (1. - state.shown_scroll.abs() / 60.).clamp(0., 1.);
+    // With pins, Up moves into the shelf instead: the chevron leaves as the shelf comes.
+    let alpha = (1. - state.shown_scroll.abs() / 60.).clamp(0., 1.) * (1. - state.shelf_shown());
     if alpha <= 0. {
         return;
     }
