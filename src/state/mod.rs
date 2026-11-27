@@ -6,6 +6,8 @@ mod focus;
 mod looks;
 mod navigation;
 mod phone;
+mod pins;
+pub use pins::ShelfRow;
 mod rearrange;
 mod switcher;
 mod text;
@@ -14,6 +16,7 @@ use crate::i18n;
 use crate::model::{App, Appearance, BACKGROUNDS, Inventory, Preferences};
 use crate::weather::{self, Unit};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 /// Settings' sections, in the order the section list shows them.
@@ -31,8 +34,8 @@ pub fn section_settings(section: usize) -> &'static [usize] {
     match section {
         // Clock format, Lounge as Home, Hidden apps, Quit.
         GENERAL_SECTION => &[1, 10, 7, 5],
-        // Clock, appearance, app names, cover art, profile picture.
-        HOME_SECTION => &[13, 9, 0, 6, 8],
+        // Clock, YouTube pins, appearance, app names, cover art, profile picture.
+        HOME_SECTION => &[13, 14, 9, 0, 6, 8],
         // Larger names, focus outline, reduced motion.
         ACCESS_SECTION => &[12, 11, 2],
         _ => &[],
@@ -50,6 +53,8 @@ pub const HOME_TILE_PITCH: f32 = 354.;
 /// How long focus takes to land on the next control: short, so the highlight is where the
 /// press went before the eye looks for it.
 pub const FOCUS_MS: f32 = 180.;
+/// The YouTube shelf and the clock trade places this fast.
+pub const SHELF_FADE_MS: f32 = 240.;
 /// tvOS 26 home, five large icons a row (324x194, Apple's 5:3): in Top Shelf
 /// mode the dock icons sit at y=780 with the next row peeking at the bottom;
 /// scrolling by GRID_SCROLL brings the dock to the top (y=90) for the grid.
@@ -70,6 +75,8 @@ pub const ROW_PITCH: f32 = 304.;
 pub const GRID_LEFT: f32 = 90.;
 pub const GRID_STEP: f32 = 354.;
 pub const SETTINGS_TILE: &str = "lounge.settings";
+/// The TV's YouTube app (LG's, and YouTube AdFree, which installs under the same id).
+pub const YOUTUBE: &str = "youtube.leanback.v4";
 pub const HOME_DASHBOARD: &str = "com.webos.app.homeconnect";
 pub const PAGE_MS: f32 = 280.;
 /// The scroll glide's spring (rad/s): half way in ~85 ms, settled in ~0.5 s.
@@ -138,6 +145,8 @@ pub enum Target {
     InputPick(String),
     /// A name in the Inputs panel's name list: 0 is the port's own name, then INPUT_NAMES.
     InputName(usize),
+    /// A card on the YouTube shelf, left to right (`State::shelf_cards`).
+    Card(usize),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -202,6 +211,8 @@ pub enum Overlay {
 pub enum Subpage {
     Clock,
     BigClock,
+    /// The YouTube pins, and adding one from the phone.
+    Pins,
     WeatherLocation,
     Temperature,
     Hidden,
@@ -222,6 +233,10 @@ pub enum Effect {
     Save,
     Refresh,
     Launch(String),
+    /// Play a YouTube video (its id) in the TV's YouTube app.
+    Play(String),
+    /// Resolve a pasted link, or bring the pins' uploads up to date.
+    Pins(crate::pins_service::Command),
     /// Ask webOS which apps are open, for the app switcher.
     Running,
     Close(String),
@@ -351,6 +366,10 @@ pub struct State {
     pub fading_to: Option<String>,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
+    /// Each YouTube pin's latest uploads, by `Pin::key`.
+    pub shelf: BTreeMap<String, ShelfRow>,
+    /// When the pins' uploads were last asked for.
+    pub pins_refreshed: Option<Instant>,
     /// Outgoing focus target, when it started shrinking, and how focused it was then.
     pub focus_from: Option<(Target, Instant, f32)>,
     focus_since: Option<Instant>,
@@ -402,6 +421,12 @@ pub struct State {
     pub inputs_lit: Target,
     /// Full-screen Top Shelf: Up from the dock lowers it off screen.
     pub expanded: bool,
+    /// The YouTube shelf is open over the wallpaper (Up from YouTube in the dock).
+    pub shelf_open: bool,
+    /// When it last appeared or left: it and the clock crossfade.
+    pub shelf_changed: Option<Instant>,
+    /// Whether it showed on the last frame (`State::track_shelf`).
+    pub shelf_was_visible: bool,
     /// The arrow being handled is a held key's repeat: it stops at edges.
     pub held: bool,
     /// When Top Shelf mode last began; its chevron bobs for a moment.
@@ -544,6 +569,8 @@ impl State {
             fading_to: None,
             panel_started: None,
             weather: weather::Weather::default(),
+            shelf: BTreeMap::new(),
+            pins_refreshed: None,
             focus_from: None,
             focus_since: None,
             last_focus: Target::Nav(0),
@@ -569,6 +596,9 @@ impl State {
             inputs_closed: None,
             inputs_lit: Target::InputsButton,
             expanded: false,
+            shelf_open: false,
+            shelf_changed: None,
+            shelf_was_visible: false,
             held: false,
             shelf_since: Some(crate::clock::now()),
             shelf_app: None,
@@ -694,6 +724,16 @@ impl State {
             self.inputs_closed = None;
         }
         if self.inputs_closed.is_some() {
+            self.dirty = true;
+        }
+        self.track_shelf();
+        if self
+            .shelf_changed
+            .is_some_and(|at| crate::clock::since(at).as_secs_f32() * 1000. >= SHELF_FADE_MS)
+        {
+            self.shelf_changed = None;
+        }
+        if self.shelf_changed.is_some() {
             self.dirty = true;
         }
         if let Some((_, _, at)) = &self.leaving {

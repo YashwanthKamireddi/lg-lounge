@@ -511,6 +511,16 @@ fn section_rows(state: &State, section: usize) -> Vec<RowSpec> {
                     on_off(state.preferences.focus_outline),
                     false,
                 ),
+                14 => spec(
+                    14,
+                    "youtubePins",
+                    Some(if state.preferences.pins.is_empty() {
+                        i18n::t("pinsNone").to_owned()
+                    } else {
+                        state.preferences.pins.len().to_string()
+                    }),
+                    true,
+                ),
                 13 => spec(
                     13,
                     "bigClock",
@@ -547,6 +557,7 @@ pub(super) fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         (_, true) => i18n::t("settings"),
         (Some(Subpage::Clock), _) => i18n::t("clockFormat"),
         (Some(Subpage::BigClock), _) => i18n::t("bigClock"),
+        (Some(Subpage::Pins), _) => i18n::t("youtubePins"),
         (Some(Subpage::Appearance), _) => i18n::t("appearance"),
         (Some(Subpage::Hidden), _) => i18n::t("hiddenApps"),
         (Some(Subpage::Avatar), _) => i18n::t("profilePicture"),
@@ -825,6 +836,24 @@ fn settings_list(out: &mut Scene, state: &State, assets: &Assets) {
                 (i18n::t("hour12"), None, !state.hour_24),
                 (i18n::t("hour24"), None, state.hour_24),
             ],
+            Subpage::Pins => state
+                .preferences
+                .pins
+                .iter()
+                .map(|pin| {
+                    let kind = match pin.kind {
+                        crate::model::PinKind::Channel => i18n::t("pinChannel"),
+                        crate::model::PinKind::Playlist => i18n::t("pinPlaylist"),
+                        crate::model::PinKind::Video => i18n::t("pinVideo"),
+                    };
+                    (pin.title.as_str(), Some(kind), false)
+                })
+                .chain(std::iter::once((
+                    i18n::t("pinsAdd"),
+                    Some(i18n::t("pinsAddDetail")),
+                    false,
+                )))
+                .collect(),
             Subpage::BigClock => crate::state::CLOCK_STYLES
                 .iter()
                 .map(|style| {

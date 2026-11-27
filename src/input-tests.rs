@@ -176,6 +176,9 @@ impl Harness {
                         self.replies.push(1 + self.random.below(40) as u32);
                     }
                 }
+                // The shelf and its fetches: no pins in these runs.
+                Effect::Play(video) => panic!("{what} played {video} with no pins"),
+                Effect::Pins(_) => {}
                 Effect::Running => {
                     let mut open: Vec<String> = self
                         .state

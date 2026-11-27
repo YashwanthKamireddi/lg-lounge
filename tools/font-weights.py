@@ -59,4 +59,11 @@ if len(sys.argv) > 2:
     clock.save(directory / "font-clock.ttf")
 else:
     (directory / "font-clock.ttf").write_bytes((directory / "font-display-500.ttf").read_bytes())
+# Scripts SF Pro and Inter do not draw, shaped with rustybuzz (src/renderer/text.rs): Google's
+# Noto Sans (OFL), one semibold cut each, as the interface's titles are.
+fonts = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+for script in ("telugu", "devanagari"):
+    noto = TTFont(fonts / f"noto-sans-{script}.ttf")
+    noto = instantiateVariableFont(noto, {"wght": 600, "wdth": 100})
+    noto.save(directory / f"font-{script}.ttf")
 (directory / "font-metrics.json").write_text(json.dumps(metrics, ensure_ascii=False), encoding="utf8")

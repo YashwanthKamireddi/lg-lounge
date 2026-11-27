@@ -61,6 +61,7 @@ impl State {
         self.focus = match self.subpage.take() {
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::BigClock) => Target::Setting(13),
+            Some(Subpage::Pins) => Target::Setting(14),
             Some(Subpage::WeatherLocation) => Target::WeatherLocation,
             Some(Subpage::Temperature) => Target::WeatherTemperature,
             // Its row goes once nothing is hidden; focus takes the row above it.
@@ -237,6 +238,7 @@ impl State {
                 let count = match self.subpage {
                     Some(Subpage::Clock | Subpage::Temperature) => 2,
                     Some(Subpage::BigClock) => CLOCK_STYLES.len(),
+                    Some(Subpage::Pins) => self.preferences.pins.len() + 1,
                     Some(Subpage::Appearance) => APPEARANCES.len(),
                     Some(Subpage::Hidden) => self.hidden_count().max(1),
                     // The pictures, then "From your phone".
@@ -370,6 +372,34 @@ impl State {
                     self.open(next);
                     return vec![];
                 }
+            }
+            // Up from YouTube in the dock opens its shelf: the pins' newest uploads. A held Up
+            // stops at the dock, as everywhere.
+            if self.page == Page::Apps
+                && !self.held
+                && !self.expanded
+                && matches!(direction, Direction::Up)
+                && self.focus == Target::App(YOUTUBE.into())
+                && self
+                    .apps()
+                    .iter()
+                    .take(APPS_COLUMNS)
+                    .any(|app| app.id == YOUTUBE)
+                && self.open_shelf()
+            {
+                return vec![];
+            }
+            if let Target::Card(index) = self.focus {
+                let count = self.shelf_cards().len();
+                match direction {
+                    Direction::Left if index > 0 => self.focus(Target::Card(index - 1), controls),
+                    Direction::Right if index + 1 < count => {
+                        self.focus(Target::Card(index + 1), controls)
+                    }
+                    Direction::Down => self.close_shelf(),
+                    _ => {}
+                }
+                return vec![];
             }
             if self.page == Page::Apps
                 && let Target::App(id) = &self.focus

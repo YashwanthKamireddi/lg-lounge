@@ -708,7 +708,8 @@ pub type Wake = std::sync::Arc<dyn Fn() + Send + Sync>;
 
 pub enum Request {
     Refresh,
-    Launch(String),
+    /// An app, with the launch parameters it opens something with (a YouTube video).
+    Launch(String, Option<Value>),
     Running,
     Close(String),
     /// Lounge as the TV's Home: Some(true/false) to make it so or give Home
@@ -842,7 +843,7 @@ impl Platform {
                         Ok(())
                     }),
                     // `send` routes these to the apps thread.
-                    Request::Launch(_) | Request::Close(_) => continue,
+                    Request::Launch(..) | Request::Close(_) => continue,
                 };
                 if crate::wake::sent(responses.send(response)).is_err() {
                     break;
@@ -861,7 +862,7 @@ impl Platform {
 
     pub fn send(&self, request: Request) {
         let _ = match request {
-            Request::Launch(_) | Request::Close(_) => self.apps.send(request),
+            Request::Launch(..) | Request::Close(_) => self.apps.send(request),
             request => self.sender.send(request),
         };
     }
@@ -875,14 +876,14 @@ fn apps_thread(webos: bool, responses: mpsc::Sender<Response>) -> mpsc::Sender<R
     thread::spawn(move || {
         while let Ok(request) = requests.recv() {
             let response = match request {
-                Request::Launch(id) => Response::Launched(if !webos {
+                Request::Launch(id, params) => Response::Launched(if !webos {
                     Ok(())
                 } else if crate::scroll_preview::is_placeholder(&id) {
                     Err("Scroll preview cards cannot be launched".into())
                 } else if !valid_app_id(&id) {
                     Err("Invalid application identifier".into())
                 } else {
-                    launch(&id)
+                    launch(&id, params)
                 }),
                 Request::Close(id) => {
                     let result = if !webos {
@@ -907,7 +908,7 @@ fn apps_thread(webos: bool, responses: mpsc::Sender<Response>) -> mpsc::Sender<R
 /// Opens `id`. One whose last launch never reached the screen (a web app
 /// whose page never loaded, on a slow network: webOS keeps it, and opening
 /// it again only signals that dead page) is closed first and starts afresh.
-fn launch(id: &str) -> Result<(), String> {
+fn launch(id: &str, params: Option<Value>) -> Result<(), String> {
     let stalled = FRONTS
         .lock()
         .map(|mut fronts| fronts.launching(id, std::time::Instant::now()))
@@ -931,11 +932,11 @@ fn launch(id: &str) -> Result<(), String> {
         ));
     }
     crate::history::note(&format!("Lounge opens {id}"));
-    call(
-        "luna://com.webos.applicationManager/launch",
-        json!({"id": id}),
-    )
-    .map(|_| ())
+    let mut request = json!({"id": id});
+    if let Some(params) = params {
+        request["params"] = params;
+    }
+    call("luna://com.webos.applicationManager/launch", request).map(|_| ())
 }
 
 /// Whether `id` is running unseen (started by LG's preloader, never brought to the front since)

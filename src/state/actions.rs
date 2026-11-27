@@ -186,6 +186,14 @@ impl State {
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
+                    14 => {
+                        self.subpage = Some(Subpage::Pins);
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(crate::clock::now());
+                        }
+                        self.focus = Target::Choice(0);
+                        return vec![];
+                    }
                     13 => {
                         self.subpage = Some(Subpage::BigClock);
                         if !self.preferences.reduced_motion {
@@ -288,6 +296,17 @@ impl State {
                     Some(Subpage::BigClock) => {
                         self.preferences.clock = CLOCK_STYLES[index.min(CLOCK_STYLES.len() - 1)];
                     }
+                    // A pin's row takes it off; the row after the pins adds one from the phone.
+                    Some(Subpage::Pins) => {
+                        let Some(pin) = self.preferences.pins.get(index).cloned() else {
+                            return self.open_phone(crate::companion::Kind::Pins);
+                        };
+                        let effects = self.unpin(&pin.key());
+                        self.notify(i18n::format("unpinned", &[("title", &pin.title)]));
+                        let count = self.preferences.pins.len() + 1;
+                        self.focus = Target::Choice(index.min(count - 1));
+                        return effects;
+                    }
                     Some(Subpage::Temperature) => {
                         self.preferences.temperature_unit = if index == 1 {
                             Unit::Fahrenheit
@@ -383,6 +402,13 @@ impl State {
                 return vec![Effect::Uninstall(id)];
             }
             Target::Alert(_) => return self.back(),
+            Target::Card(index) => {
+                return self
+                    .shelf_cards()
+                    .get(index)
+                    .map(|card| vec![Effect::Play(card.card.video.clone())])
+                    .unwrap_or_default();
+            }
             Target::InputsButton => {
                 let first = self.input_choices().into_iter().next();
                 if let Some((id, ..)) = first {
@@ -511,7 +537,8 @@ impl State {
             || self.overlay.is_some()
             || self.switcher.is_some()
             || self.moving.is_some()
-            || self.expanded;
+            || self.expanded
+            || self.shelf_open;
         if !open && !in_front {
             return;
         }
@@ -520,6 +547,7 @@ impl State {
         }
         self.switcher = None;
         self.expanded = false;
+        self.shelf_open = false;
         self.open(1);
     }
 
@@ -566,6 +594,10 @@ impl State {
         self.dirty = true;
         // Back while an app opens: stay on Home, as Home does.
         if self.cancel_launch() {
+            return vec![];
+        }
+        if self.shelf_open && self.overlay.is_none() {
+            self.close_shelf();
             return vec![];
         }
         if let Some(switcher) = &mut self.switcher

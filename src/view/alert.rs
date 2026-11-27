@@ -69,11 +69,14 @@ pub(super) fn phone(out: &mut Scene, state: &State, assets: &Assets) {
     let kind = state.phone.as_ref().map(|phone| phone.kind);
     let title = match kind {
         Some(crate::companion::Kind::Avatar) => i18n::t("phoneAvatarTvTitle"),
+        Some(crate::companion::Kind::Pins) => i18n::t("pinsTvTitle"),
         _ => i18n::t("phoneWallpaperTvTitle"),
     };
+    let pins = kind == Some(crate::companion::Kind::Pins);
     let message = match state.phone.as_ref().map(|phone| &phone.step) {
         None => i18n::t("phoneStarting"),
         Some(PhoneStep::Waiting) => i18n::t("phoneScan"),
+        Some(PhoneStep::Opened) if pins => i18n::t("pinsTvOpened"),
         Some(PhoneStep::Opened) => i18n::t("phoneOpened"),
         Some(PhoneStep::Receiving) => i18n::t("phoneReceiving"),
         Some(PhoneStep::Failed(reason)) => i18n::t(reason),

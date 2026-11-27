@@ -13,6 +13,7 @@ pub(crate) fn effects(
     writer: &storage::Writer,
     weather: &weather_service::Service,
     phone: &crate::companion::Service,
+    pins: &crate::pins_service::Service,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -41,44 +42,16 @@ pub(crate) fn effects(
                 platform.send(Request::NameInput(device, name, icon))
             }
             Effect::ClockFormat(hour_24) => crate::time_format::set(hour_24),
-            Effect::Launch(id) => {
-                if scroll_preview::is_placeholder(&id) {
-                    state.notify(i18n::t("scrollTestOnly"));
-                    continue;
-                }
-                // A second press while the first launch is on its way is the
-                // same press twice: nothing more is asked or recorded.
-                if state.launch_busy() {
-                    continue;
-                }
-                state.note_launch(&id);
-                // webOS plays its own native launch transition; Lounge adds
-                // nothing over it (a second animation read as a flicker).
-                if platform.webos {
-                    state.launching = true;
-                    state.launch_started = Some(crate::clock::now());
-                    let title = state
-                        .inventory
-                        .apps
-                        .iter()
-                        .find(|a| a.id == id)
-                        .map_or(id.clone(), |app| app.title.clone());
-                    state.launch_waiting = Some((title, crate::clock::now(), 0));
-                    state.launch_pending = Some((id.clone(), crate::clock::now()));
-                    platform.send(Request::Launch(id));
-                } else {
-                    let title = state
-                        .inventory
-                        .apps
-                        .iter()
-                        .find(|a| a.id == id)
-                        .map_or(id.as_str(), |app| app.title.as_str());
-                    state.notify(i18n::format("desktopPreview", &[("app", title)]));
-                }
-                // The recents list is written in the background, after the
-                // launch request is on its way.
-                writer.save(&state.preferences);
-            }
+            Effect::Launch(id) => launch(state, platform, writer, id, None),
+            // A pinned YouTube video, in the TV's YouTube app.
+            Effect::Play(video) => launch(
+                state,
+                platform,
+                writer,
+                crate::state::YOUTUBE.into(),
+                Some(crate::youtube::launch_params(&video)),
+            ),
+            Effect::Pins(command) => pins.send(command),
             Effect::Quit => {
                 save_order(state, writer);
                 return false;
@@ -117,4 +90,51 @@ pub(crate) fn save_order(state: &mut State, writer: &storage::Writer) {
     if std::mem::take(&mut state.unsaved_order) {
         writer.save(&state.preferences);
     }
+}
+
+/// Opens an app (with the launch parameters `params`: a YouTube video, say) as a press on its
+/// tile does: one launch at a time, recorded in the recents, cancelled by Home meanwhile.
+fn launch(
+    state: &mut State,
+    platform: &Platform,
+    writer: &storage::Writer,
+    id: String,
+    params: Option<serde_json::Value>,
+) {
+    if scroll_preview::is_placeholder(&id) {
+        state.notify(i18n::t("scrollTestOnly"));
+        return;
+    }
+    // A second press while the first launch is on its way is the
+    // same press twice: nothing more is asked or recorded.
+    if state.launch_busy() {
+        return;
+    }
+    state.note_launch(&id);
+    // webOS plays its own native launch transition; Lounge adds
+    // nothing over it (a second animation read as a flicker).
+    if platform.webos {
+        state.launching = true;
+        state.launch_started = Some(crate::clock::now());
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.clone(), |app| app.title.clone());
+        state.launch_waiting = Some((title, crate::clock::now(), 0));
+        state.launch_pending = Some((id.clone(), crate::clock::now()));
+        platform.send(Request::Launch(id, params));
+    } else {
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.as_str(), |app| app.title.as_str());
+        state.notify(i18n::format("desktopPreview", &[("app", title)]));
+    }
+    // The recents list is written in the background, after the
+    // launch request is on its way.
+    writer.save(&state.preferences);
 }
