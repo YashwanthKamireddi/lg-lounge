@@ -681,14 +681,15 @@ impl State {
 
     /// What the screen saver reads as it starts (tv/screensaver.qml): its face, the clock format
     /// and the weather in words.
-    pub fn saver_settings(&self) -> String {
-        let weather = self
+    pub fn saver_settings(&self, now: i64) -> String {
+        let shown = self
             .preferences
             .weather_location
             .as_ref()
             .filter(|_| self.preferences.show_weather)
-            .and_then(|place| self.weather.reading(place))
-            .map(|reading| {
+            .and_then(|place| self.weather.shown_reading(place, now));
+        let weather = shown
+            .map(|(reading, _)| {
                 format!(
                     "{} · {}",
                     i18n::t(weather::condition(reading).key),
@@ -703,6 +704,8 @@ impl State {
             "face": self.preferences.saver.name(),
             "hour24": self.hour_24,
             "weather": weather,
+            // The saver runs for hours: past this it leaves the weather out (unix seconds).
+            "weather_until": shown.map_or(0, |(_, until)| until),
         })
         .to_string()
     }

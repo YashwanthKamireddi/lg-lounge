@@ -28,7 +28,7 @@ WebOSWindow {
     property string assets: "file:///media/developer/apps/usr/palm/applications/io.github.yashwanthkamireddi.lounge/assets/"
     // What Lounge last wrote: the face, 12 or 24 hours, and the weather in words.
     property string settingsUrl: "file:///var/lib/lounge/saver.json"
-    property var settings: ({ face: "analog", hour24: false, weather: "" })
+    property var settings: ({ face: "analog", hour24: false, weather: "", weather_until: 0 })
     property date now: new Date()
 
     function load() {
@@ -44,6 +44,10 @@ WebOSWindow {
         request.send()
     }
 
+    // The weather Lounge wrote, while it is recent enough to read as now.
+    function weatherNow() {
+        return (settings.weather_until || 0) * 1000 > window.now.getTime() ? settings.weather : ""
+    }
     function weekday(date) {
         return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()]
     }
@@ -367,7 +371,7 @@ WebOSWindow {
             Repeater {
                 model: [
                     { label: "DATE", value: window.now.getDate() + " " + month(window.now) },
-                    { label: "WEATHER", value: settings.weather || "—" }
+                    { label: "WEATHER", value: window.weatherNow() || "—" }
                 ]
                 Rectangle {
                     width: 634

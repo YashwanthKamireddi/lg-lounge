@@ -1525,7 +1525,9 @@ impl Shell {
         if !self.webos || !platform::is_home() {
             return;
         }
-        let settings = self.state.saver_settings();
+        let settings = self
+            .state
+            .saver_settings(OffsetDateTime::now_utc().unix_timestamp());
         if self.saver_written.as_deref() == Some(settings.as_str()) {
             return;
         }

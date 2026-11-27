@@ -6,6 +6,10 @@ use serde_json::Value;
 
 pub const REFRESH_SECONDS: i64 = 15 * 60;
 pub const MAX_CACHE_AGE: i64 = 6 * 60 * 60;
+/// A reading is shown as the weather now for this long. Older (offline for an hour), it is kept
+/// for the next start but no longer shown: a temperature from hours ago, or a sun after dark,
+/// would read as now.
+pub const SHOWN_SECONDS: i64 = 60 * 60;
 /// After a failed fetch: retry in a minute (a Wi-Fi blip recovers fast),
 /// doubling up to half an hour while the TV stays offline.
 const RETRY_FIRST: i64 = 60;
@@ -474,6 +478,15 @@ impl Weather {
         self.invalidate_forecast();
         self.cache = None;
     }
+    /// The reading for `location` while it may still be shown as now, with when it stops.
+    pub fn shown_reading(&self, location: &Location, now: i64) -> Option<(Reading, i64)> {
+        self.cache
+            .as_ref()
+            .filter(|cache| cache.key == location.key())
+            .filter(|cache| cache.age(now).is_some_and(|age| age <= SHOWN_SECONDS))
+            .map(|cache| (cache.reading, cache.updated_at + SHOWN_SECONDS))
+    }
+    #[cfg(test)]
     pub fn reading(&self, location: &Location) -> Option<Reading> {
         self.cache
             .as_ref()

@@ -32,7 +32,8 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
         .weather_location
         .as_ref()
         .filter(|_| state.preferences.show_weather)
-        .and_then(|place| state.weather.reading(place));
+        .and_then(|place| state.weather.shown_reading(place, now.unix_timestamp()))
+        .map(|(reading, _)| reading);
     let temperature = reading.map(|reading| {
         (
             weather::format_temperature(reading.temperature, state.preferences.temperature_unit),

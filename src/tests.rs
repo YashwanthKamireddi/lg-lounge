@@ -2415,7 +2415,7 @@ fn a_pin_this_version_cannot_read_drops_only_itself() {
 fn the_screen_saver_face_is_chosen_in_settings_and_written_for_the_saver() {
     let mut state = ready();
     let read = |state: &State| -> serde_json::Value {
-        serde_json::from_str(&state.saver_settings()).unwrap()
+        serde_json::from_str(&state.saver_settings(0)).unwrap()
     };
     assert_eq!(read(&state)["face"], "analog");
     // Settings › Home › Screen saver › Modular.
