@@ -71,14 +71,23 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         Target::Card(index) => index.min(cards.len() - 1),
         _ => 0,
     };
-    // The row moves only when focus would leave it: the focused card stays where the eye is.
-    let first = focused.saturating_sub(VISIBLE - 1);
+    // The row moves only when focus would leave it, and then glides there with the focus:
+    // the focused card stays where the eye is, and the row never jumps.
+    let first_for = |index: usize| index.saturating_sub(VISIBLE - 1) as f32;
+    let first = match state.focus_move() {
+        Some((Target::Card(from), progress)) => {
+            let from = first_for((*from).min(cards.len() - 1));
+            from + (first_for(focused) - from) * progress
+        }
+        _ => first_for(focused),
+    };
     let start = out.draw.len();
     for (index, shelf_card) in cards.iter().enumerate() {
-        let x = LEFT + (index as f32 - first as f32) * (CARD_W + GAP);
-        if x + CARD_W < -CARD_W || x > 1920. + CARD_W {
+        let x = LEFT + (index as f32 - first) * (CARD_W + GAP);
+        if x + CARD_W < 0. || x > 1920. {
             continue;
         }
+        let card_start = out.draw.len();
         let lift = state.focus_amount(&Target::Card(index));
         let base = Rect::new(x, ROW_Y, CARD_W, CARD_H);
         let scale = 1. + 0.08 * lift;
@@ -130,6 +139,13 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
             );
         }
         out.control(Target::Card(index), base, false);
+        // A card reaching past either edge of the screen fades with how far it reaches, as a
+        // row runs off the edge on tvOS, instead of being cut.
+        let inside = ((1920. - LEFT / 2. - x) / CARD_W).min((x + CARD_W - LEFT / 2.) / CARD_W);
+        let shown = inside.clamp(0., 1.);
+        if shown < 1. {
+            out.fade(card_start, shown * shown * (3. - 2. * shown), 1.);
+        }
     }
     // The focused card's video and channel, above the row.
     let shelf_card = &cards[focused];
