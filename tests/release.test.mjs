@@ -121,7 +121,7 @@ function gateFixture({ pull = {}, previous = '2.0.3', current = '2.0.4', event =
   const context = {
     eventName: 'push',
     ref: 'refs/heads/main',
-    repo: { owner: 'YashwanthKamireddi', repo: 'lounge' },
+    repo: { owner: 'YashwanthKamireddi', repo: 'lg-lounge' },
     sha: 'merged-commit',
     payload: { before: 'previous-commit', forced: false, deleted: false },
     ...event,
