@@ -2527,3 +2527,52 @@ fn the_pointer_moving_onto_a_shelf_card_keeps_the_shelf() {
     state.back();
     assert_eq!(state.focus, Target::App(crate::state::YOUTUBE.into()));
 }
+
+#[test]
+fn removing_a_pin_in_settings_asks_first_with_cancel_focused() {
+    use crate::model::{Pin, PinKind};
+    use crate::state::{Overlay, Subpage};
+    let mut state = ready();
+    for (id, title) in [
+        ("UCJi8M0hRKjz8SLPvJKEVTOg", "ETV Andhra Pradesh"),
+        ("UCSzOZ97LOpU-_AVlGfmD4rQ", "Bhakthi TV"),
+    ] {
+        state.preferences.pins.push(Pin {
+            kind: PinKind::Channel,
+            id: id.into(),
+            title: title.into(),
+            avatar: None,
+        });
+    }
+    state.open(2);
+    state.section = crate::state::HOME_SECTION;
+    state.focus = Target::Setting(14);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Pins));
+    // OK on a pin asks; nothing is removed yet, and Cancel is focused.
+    state.focus = Target::Choice(0);
+    assert!(state.activate().is_empty());
+    assert!(matches!(state.overlay, Some(Overlay::Unpin { .. })));
+    assert_eq!(state.focus, Target::Alert(1));
+    assert_eq!(state.preferences.pins.len(), 2);
+    // Cancel (OK on it, or Back) keeps it.
+    state.activate();
+    assert!(state.overlay.is_none());
+    assert_eq!(state.preferences.pins.len(), 2);
+    assert_eq!(state.focus, Target::Choice(0));
+    // Remove takes it off; focus takes the row now in its place.
+    state.activate();
+    state.focus = Target::Alert(0);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.pins.len(), 1);
+    assert_eq!(state.preferences.pins[0].title, "Bhakthi TV");
+    assert_eq!(state.focus, Target::Choice(0));
+    assert!(
+        state
+            .notice
+            .as_ref()
+            .unwrap()
+            .0
+            .contains("ETV Andhra Pradesh")
+    );
+}

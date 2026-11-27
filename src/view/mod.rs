@@ -530,6 +530,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     if let Some(
         overlay @ (Overlay::Options { .. }
         | Overlay::Uninstall { .. }
+        | Overlay::Unpin { .. }
         | Overlay::OfferHome { .. }
         | Overlay::Phone { .. }
         | Overlay::Inputs
@@ -569,6 +570,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
             Overlay::Uninstall { id, .. } => alert::uninstall(&mut out, state, assets, id),
+            Overlay::Unpin { key, .. } => alert::unpin(&mut out, state, assets, key),
             Overlay::OfferHome { .. } => alert::offer_home(&mut out, state, assets),
             Overlay::Phone { .. } => alert::phone(&mut out, state, assets),
             Overlay::Inputs | Overlay::InputName(_) => inputs_panel(&mut out, state, assets),

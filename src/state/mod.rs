@@ -194,6 +194,12 @@ pub enum Overlay {
         id: String,
         restore: Target,
     },
+    /// The same alert before taking a pin off the shelf (its `Pin::key`): Remove over Cancel,
+    /// Cancel focused.
+    Unpin {
+        key: String,
+        restore: Target,
+    },
     /// Asked once, on a TV that can have it: make Lounge the TV's Home? Make Home over Not Now,
     /// Make Home focused. Back is Not Now; Settings can change it later.
     OfferHome {
@@ -1166,6 +1172,7 @@ impl State {
         if let Some(
             Overlay::Options { restore, .. }
             | Overlay::Uninstall { restore, .. }
+            | Overlay::Unpin { restore, .. }
             | Overlay::OfferHome { restore }
             | Overlay::Phone { restore },
         ) = &self.overlay
@@ -1174,6 +1181,7 @@ impl State {
             if let Some(
                 Overlay::Options { restore, .. }
                 | Overlay::Uninstall { restore, .. }
+                | Overlay::Unpin { restore, .. }
                 | Overlay::OfferHome { restore }
                 | Overlay::Phone { restore },
             ) = &mut self.overlay

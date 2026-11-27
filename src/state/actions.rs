@@ -311,16 +311,23 @@ impl State {
                     Some(Subpage::Saver) => {
                         self.preferences.saver = SAVER_FACES[index.min(SAVER_FACES.len() - 1)];
                     }
-                    // A pin's row takes it off; the row after the pins adds one from the phone.
+                    // A pin's row asks before taking it off; the row after the pins adds one from
+                    // the phone.
                     Some(Subpage::Pins) => {
-                        let Some(pin) = self.preferences.pins.get(index).cloned() else {
+                        let Some(pin) = self.preferences.pins.get(index) else {
                             return self.open_phone(crate::companion::Kind::Pins);
                         };
-                        let effects = self.unpin(&pin.key());
-                        self.notify(i18n::format("unpinned", &[("title", &pin.title)]));
-                        let count = self.preferences.pins.len() + 1;
-                        self.focus = Target::Choice(index.min(count - 1));
-                        return effects;
+                        self.overlay = Some(Overlay::Unpin {
+                            key: pin.key(),
+                            restore: Target::Choice(index),
+                        });
+                        // Cancel is where focus lands: OK pressed twice never removes a pin.
+                        self.focus = Target::Alert(1);
+                        self.pointer = false;
+                        self.pressed = None;
+                        self.panel_started =
+                            (!self.preferences.reduced_motion).then(crate::clock::now);
+                        return vec![];
                     }
                     Some(Subpage::Temperature) => {
                         self.preferences.temperature_unit = if index == 1 {
@@ -391,6 +398,29 @@ impl State {
                     return vec![Effect::TvHome(Some(true))];
                 }
                 return vec![];
+            }
+            Target::Alert(0) if matches!(self.overlay, Some(Overlay::Unpin { .. })) => {
+                let Some(Overlay::Unpin { key, restore }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                let title = self
+                    .preferences
+                    .pins
+                    .iter()
+                    .find(|pin| pin.key() == key)
+                    .map(|pin| pin.title.clone());
+                let effects = self.unpin(&key);
+                if let Some(title) = title {
+                    self.notify(i18n::format("unpinned", &[("title", &title)]));
+                }
+                // The row that takes its place, or Add from your phone.
+                let count = self.preferences.pins.len() + 1;
+                self.focus = match restore {
+                    Target::Choice(index) => Target::Choice(index.min(count - 1)),
+                    other => other,
+                };
+                return effects;
             }
             Target::Alert(0) => {
                 let Some(Overlay::Uninstall { id, restore }) = self.overlay.take() else {
@@ -639,6 +669,7 @@ impl State {
             self.focus = match overlay {
                 Overlay::Options { restore, .. }
                 | Overlay::Uninstall { restore, .. }
+                | Overlay::Unpin { restore, .. }
                 | Overlay::OfferHome { restore }
                 | Overlay::Phone { restore } => restore,
                 Overlay::Inputs => {
