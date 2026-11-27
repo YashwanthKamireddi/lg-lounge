@@ -69,9 +69,11 @@ that webOS itself reads, and every part is removed again when Lounge as Home is 
   last input. The same compositor filter sees the power state go from standby to active and
   opens Home over it, as LG's Home does when "Home Auto Launch" is on.
 - **Screen saver.** webOS draws its screen saver from a QML file in
-  `com.webos.app.screensaver`. While Lounge is Home, its own analog clock (`tv/screensaver.qml`)
-  is bound over that file: Qt's render thread sweeps the second hand, and the clock drifts slowly
-  so no pixel holds the image. A saver another integration mounted is left alone.
+  `com.webos.app.screensaver`. While Lounge is Home, its own faces (`tv/screensaver.qml`: Analog,
+  Digital, Modular, Numerals, chosen in Settings) are bound over that file. Qt's render thread
+  sweeps the second hand, the digital faces tick on the wall clock's second, and the face steps a
+  pixel or two once a minute so no pixel holds the image. Weather older than an hour is left
+  out. A saver another integration mounted is left alone.
 - **Staying safe.** Three failed starts within a minute hand Home back to LG. Turning Lounge as
   Home off from the remote removes the mount, the service, the filter, the screen saver and the
   hook, and gives the boot its input back. Uninstalling Lounge and restarting the TV does the
@@ -81,14 +83,16 @@ that webOS itself reads, and every part is removed again when Lounge as Home is 
 
 Above the dock, where the clock is, a focused app can show its own content, as Apple TV's Top
 Shelf does. For YouTube that is the newest video of each pinned channel, playlist or video, with
-its thumbnail, the channel's picture and a badge while it is live; OK plays it at once through
-the YouTube app's own `contentTarget` launch parameter.
+its thumbnail, the channel's picture and a badge while it is live (only while YouTube's answer
+is recent: offline, a stream that has likely ended reads as an upload again); OK plays it at
+once through the YouTube app's own `contentTarget` launch parameter.
 
 - **No account.** A worker reads YouTube's public Atom feeds and channel pages; nothing is
   signed in and no API key is involved. It refreshes while Home is on screen and someone is
   using the remote, never behind an app or overnight under the screen saver, and keeps the thumbnails on the TV, dropping those no pin shows any more.
-- **Pinning.** A link pasted on the phone (the same QR page as photos) is resolved on the TV:
-  a handle to its channel, a video to its title. Pins are removed in Settings.
+- **Pinning.** A link pasted on the phone (the same QR page as photos), on its own or inside
+  shared text, is resolved on the TV: a handle to its channel, a video to its title. Pins are
+  moved to the front or removed in Settings.
 
 ## Text in every script
 
