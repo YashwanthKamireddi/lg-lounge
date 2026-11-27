@@ -45,8 +45,7 @@ pub(super) fn uninstall(out: &mut Scene, state: &State, assets: &Assets, id: &st
     );
 }
 
-/// Before a pin leaves the shelf: "Remove ETV Andhra Pradesh?", that it can come back from the
-/// phone, then Remove over Cancel.
+/// A pin's alert: its name, where it shows, then Move to Front, Remove (red) and Cancel.
 pub(super) fn unpin(out: &mut Scene, state: &State, assets: &Assets, key: &str) {
     let title = state
         .preferences
@@ -54,16 +53,16 @@ pub(super) fn unpin(out: &mut Scene, state: &State, assets: &Assets, key: &str) 
         .iter()
         .find(|pin| pin.key() == key)
         .map_or("", |pin| pin.title.as_str());
-    let buttons = [i18n::t("remove"), i18n::t("cancel")];
+    let buttons = [i18n::t("moveToFront"), i18n::t("remove"), i18n::t("cancel")];
     alert(
         out,
         state,
         assets,
         Alert {
-            title: &i18n::format("unpinTitle", &[("title", title)]),
-            message: i18n::t("unpinMessage"),
+            title,
+            message: i18n::t("pinMessage"),
             buttons: &buttons,
-            destructive: Some(0),
+            destructive: Some(1),
             figure: None,
         },
     );
