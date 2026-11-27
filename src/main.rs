@@ -23,6 +23,7 @@ mod history;
 mod home_mount;
 mod i18n;
 mod input;
+mod local_offset;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
 mod model;
@@ -318,6 +319,7 @@ fn run() -> Result<(), String> {
         .map(|now| now.offset())
         .unwrap_or(time::UtcOffset::UTC);
     history::set_offset(local_offset);
+    local_offset::start(local_offset);
     history::note(&format!("Lounge started (pid {})", std::process::id()));
     let root = match options.assets.clone() {
         Some(root) => root,
@@ -803,6 +805,12 @@ impl Shell {
         while let Ok(error) = self.writer.errors.try_recv() {
             eprintln!("{error}");
             self.state.notify(i18n::t("savedError"));
+        }
+        // Daylight saving or a new time zone: the clocks follow at once, not at the next minute.
+        let offset = local_offset::offset();
+        if offset != self.local_offset {
+            self.local_offset = offset;
+            self.last_minute = None;
         }
         let now = self
             .options
