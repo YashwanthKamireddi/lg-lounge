@@ -28,6 +28,10 @@ pub struct ShelfCard<'a> {
 impl State {
     /// The dock app the shelf is about: the one it was opened from, or the focused one.
     pub fn shelf_app(&self) -> Option<&str> {
+        // Every frame asks: with nothing pinned (most TVs) it costs nothing.
+        if self.preferences.pins.is_empty() {
+            return None;
+        }
         // In its cards, by arrows or by the Magic Remote's pointer, the shelf stays its app's.
         if self.shelf_open || matches!(self.focus, Target::Card(_)) {
             return self.shelf_owner.as_deref();
@@ -67,14 +71,18 @@ impl State {
     /// an app's content the moment it is focused: nobody has to know to press Up for it. Up
     /// then moves into its cards.
     pub fn shelf_visible(&self) -> bool {
-        self.page == Page::Apps && !self.expanded && !self.shelf_cards().is_empty()
+        self.page == Page::Apps
+            && !self.expanded
+            && !self.shelf.is_empty()
+            && !self.shelf_cards().is_empty()
     }
 
     /// Notes the shelf appearing or leaving, for the crossfade with the clock (once a frame).
     pub(super) fn track_shelf(&mut self) {
         // The dock app a shelf shows for is remembered, so a pointer moving onto a card (focus
         // then on the card, not the app) keeps the shelf it saw.
-        if let Target::App(id) = &self.focus
+        if !self.preferences.pins.is_empty()
+            && let Target::App(id) = &self.focus
             && !self.shelf_open
             && self.shelf_owner.as_ref() != Some(id)
             && self
