@@ -39,6 +39,9 @@ pub struct Card {
     pub published: String,
     /// Its thumbnail on the TV, once fetched.
     pub image: Option<String>,
+    /// Streaming live now, as YouTube's watch page says (a title saying LIVE stays after the
+    /// stream ends).
+    pub live: bool,
 }
 
 pub enum Response {
@@ -199,6 +202,19 @@ impl Client {
         )
     }
 
+    /// Whether a video is streaming now: its watch page's `isLiveNow`. Asked only of a video
+    /// whose title claims it, a few a refresh.
+    fn live_now(&self, video: &str, title: &str) -> bool {
+        if !youtube::claims_live(title) {
+            return false;
+        }
+        self.text(
+            &format!("https://www.youtube.com/watch?v={video}"),
+            4 * 1024 * 1024,
+        )
+        .is_ok_and(|page| youtube::page_live_now(&page))
+    }
+
     fn row(&self, pin: &Pin) -> Result<(Vec<Card>, Option<String>), String> {
         let cards = match pin.kind {
             PinKind::Video => vec![Card {
@@ -206,6 +222,7 @@ impl Client {
                 title: pin.title.clone(),
                 published: String::new(),
                 image: self.thumbnail(&pin.id),
+                live: self.live_now(&pin.id, &pin.title),
             }],
             PinKind::Channel | PinKind::Playlist => {
                 let link = if pin.kind == PinKind::Channel {
@@ -219,6 +236,7 @@ impl Client {
                     .take(PER_PIN)
                     .map(|video| Card {
                         image: self.thumbnail(&video.id),
+                        live: self.live_now(&video.id, &video.title),
                         video: video.id,
                         title: video.title,
                         published: video.published,

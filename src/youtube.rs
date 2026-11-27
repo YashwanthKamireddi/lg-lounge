@@ -213,6 +213,16 @@ pub fn parse_feed(xml: &str) -> Result<Feed, String> {
     Ok(Feed { title, videos })
 }
 
+/// Whether a title says it is live: worth asking its watch page.
+pub fn claims_live(title: &str) -> bool {
+    title.contains("LIVE") || title.contains("Live") || title.contains('🔴')
+}
+
+/// A watch page's own word on whether it is streaming now.
+pub fn page_live_now(page: &str) -> bool {
+    page.contains("\"isLiveNow\":true")
+}
+
 /// A channel page's id, name and avatar (its `og:` tags and `externalId`), for a pin made from
 /// a handle.
 pub fn parse_channel_page(html: &str) -> Option<(String, String, Option<String>)> {
@@ -321,6 +331,19 @@ mod tests {
             ))
         );
         assert_eq!(parse_channel_page("<html>nothing</html>"), None);
+    }
+
+    #[test]
+    fn only_the_watch_page_says_a_stream_is_live_now() {
+        assert!(claims_live("దిల్లీకి సీఎం చంద్రబాబు :🔴LIVE"));
+        assert!(!claims_live("Weekend news roundup"));
+        // An ended stream keeps LIVE in its title; its page says otherwise.
+        assert!(!page_live_now(
+            r#"..."isLiveContent":true,..."isLiveNow":false..."#
+        ));
+        assert!(page_live_now(
+            r#"..."isLiveContent":true,..."isLiveNow":true..."#
+        ));
     }
 
     #[test]
