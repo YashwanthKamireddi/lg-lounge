@@ -2384,6 +2384,7 @@ fn youtube_pins_fill_the_shelf_up_from_youtube_and_play_their_newest_video() {
         title: format!("{video} title"),
         published: "2026-11-27T07:53:51+00:00".into(),
         image: None,
+        live: false,
     };
     for (pin, video) in [(&news, "kJqrDRnWA9s"), (&telangana, "Py4TPP4OBeY")] {
         state.pins_response(Response::Shelf {
@@ -2505,6 +2506,7 @@ fn the_pointer_moving_onto_a_shelf_card_keeps_the_shelf() {
             title: "News".into(),
             published: String::new(),
             image: None,
+            live: false,
         }],
         avatar: None,
     });
@@ -2604,6 +2606,7 @@ fn the_analog_sweep_stops_while_the_shelf_covers_the_clock() {
             title: "News".into(),
             published: String::new(),
             image: None,
+            live: false,
         }],
         avatar: None,
     });
@@ -2634,6 +2637,7 @@ fn the_shelf_s_pictures_stay_on_the_gpu_while_the_grid_covers_them() {
             title: "News".into(),
             published: String::new(),
             image: Some("/cache/kJqrDRnWA9s.jpg".into()),
+            live: false,
         }],
         avatar: Some("/cache/avatar-UCJi8M0hRKjz8SLPvJKEVTOg.jpg".into()),
     });

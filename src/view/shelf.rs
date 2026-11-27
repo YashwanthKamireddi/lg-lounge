@@ -17,16 +17,11 @@ const ROW_Y: f32 = 470.;
 /// Cards that fit across the screen at once.
 const VISIBLE: usize = 4;
 
-/// A title as the shelf shows it: no emoji (the TV's font has none) and no live marker, which
-/// becomes the card's LIVE badge; and whether it was live.
-fn clean(title: &str) -> (String, bool) {
-    clean_for(title, "")
-}
-
-/// As `clean`, also dropping what repeats the line above it: hashtags, and a `|`-separated part
-/// that is just the channel's name (`… | Full Bulletin | ETV Andhra Pradesh#etvannadata`).
-fn clean_for(title: &str, channel: &str) -> (String, bool) {
-    let live = title.contains("LIVE") || title.contains('🔴');
+/// A title as the shelf shows it: no emoji (the TV's font has none), no live marker (the card's
+/// badge says it, when YouTube does), and nothing that repeats the line above it: hashtags, and
+/// a `|`-separated part that is just the channel's name
+/// (`… | Full Bulletin | ETV Andhra Pradesh#etvannadata`).
+fn clean_for(title: &str, channel: &str) -> String {
     let text: String = title
         .chars()
         .filter(|c| (*c as u32) < 0x2190 || (0x3000..0xD800).contains(&(*c as u32)))
@@ -55,11 +50,9 @@ fn clean_for(title: &str, channel: &str) -> (String, bool) {
         .filter(|part| !part.is_empty() && (channel.is_empty() || part.to_lowercase() != channel))
         .collect();
     let text = parts.join(" | ");
-    let text = text
-        .trim_end_matches([':', '|', '-', '·'])
+    text.trim_end_matches([':', '|', '-', '·'])
         .trim()
-        .to_owned();
-    (text, live)
+        .to_owned()
 }
 
 /// "Just now", "25 min ago", "3 hours ago", "Yesterday", or the date.
@@ -178,7 +171,7 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         if lift > 0. {
             out.rim(rect, TILE_RADIUS, 0.3 * lift, 0.);
         }
-        let (_, live) = clean(&shelf_card.card.title);
+        let live = shelf_card.card.live;
         // The channel's picture, bottom left on the card, as on YouTube's own TV app.
         let size = 52. * scale;
         let pad = 14. * scale;
@@ -218,7 +211,7 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
     }
     // The focused card's video and channel, above the row.
     let shelf_card = &cards[focused];
-    let (title, _) = clean_for(&shelf_card.card.title, &shelf_card.pin.title);
+    let title = clean_for(&shelf_card.card.title, &shelf_card.pin.title);
     let mut meta = shelf_card.pin.title.clone();
     if let Some(ago) = ago(&shelf_card.card.published, now) {
         meta = format!("{meta} · {ago}");
@@ -249,12 +242,12 @@ mod tests {
     #[test]
     fn titles_lose_their_emoji_and_live_markers() {
         assert_eq!(
-            clean("దిల్లీకి సీఎం చంద్రబాబు.. చర్చలు? :🔴LIVE"),
-            ("దిల్లీకి సీఎం చంద్రబాబు.. చర్చలు?".into(), true)
+            clean_for("దిల్లీకి సీఎం చంద్రబాబు.. చర్చలు? :🔴LIVE", ""),
+            "దిల్లీకి సీఎం చంద్రబాబు.. చర్చలు?"
         );
         assert_eq!(
-            clean("Weekend news roundup"),
-            ("Weekend news roundup".into(), false)
+            clean_for("Weekend news roundup", ""),
+            "Weekend news roundup"
         );
     }
 
@@ -264,21 +257,19 @@ mod tests {
             clean_for(
                 "అన్నదాత | 27th November 2026 | Annadata | Full Bulletin | ETV Andhra Pradesh#etvannadata",
                 "ETV Andhra Pradesh"
-            )
-            .0,
+            ),
             "అన్నదాత | 27th November 2026 | Annadata | Full Bulletin"
         );
         assert_eq!(
             clean_for(
                 "Kishan Reddy LIVE: Public Meeting | NTV Telugu #news #live",
                 "NTV Telugu"
-            )
-            .0,
+            ),
             "Kishan Reddy LIVE: Public Meeting"
         );
         // A channel name inside a sentence stays: only a part that is just the name goes.
         assert_eq!(
-            clean_for("Why ETV Telugu changed its logo", "ETV Telugu").0,
+            clean_for("Why ETV Telugu changed its logo", "ETV Telugu"),
             "Why ETV Telugu changed its logo"
         );
     }
