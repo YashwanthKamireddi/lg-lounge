@@ -172,7 +172,7 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
         if lift > 0. {
             out.rim(rect, TILE_RADIUS, 0.3 * lift, 0.);
         }
-        let live = shelf_card.card.live;
+        let live = shelf_card.live;
         // The channel's picture, bottom left on the card, as on YouTube's own TV app.
         let size = 52. * scale;
         let pad = 14. * scale;
@@ -216,7 +216,7 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
     let mut meta = shelf_card.pin.title.clone();
     // A stream on air is live now, not as old as its upload: "4 hours ago" beside a LIVE badge
     // read as a stream that had ended.
-    let when = if shelf_card.card.live {
+    let when = if shelf_card.live {
         Some(i18n::t("liveNow").to_owned())
     } else {
         ago(&shelf_card.card.published, now)

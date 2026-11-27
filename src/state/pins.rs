@@ -14,11 +14,17 @@ pub const PINS_RETRY: Duration = Duration::from_secs(30);
 pub const PINS_IDLE: Duration = Duration::from_secs(30 * 60);
 
 /// One pin's row: its latest uploads, newest first, and its channel's picture on the TV.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ShelfRow {
     pub cards: Vec<Card>,
     pub avatar: Option<String>,
+    /// When YouTube last answered for it: offline, the row stays, but not its LIVE claims.
+    pub fetched: std::time::Instant,
 }
+
+/// How long a row's LIVE badge holds without a fresh answer. Refreshes come every quarter hour
+/// while Home is used; past this, offline, the stream has likely ended and the badge would lie.
+const LIVE_HOLDS: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 
 /// A card on the shelf: a pin's newest upload (a video pin: itself).
 #[derive(Clone, Debug, PartialEq)]
@@ -26,6 +32,8 @@ pub struct ShelfCard<'a> {
     pub pin: &'a crate::model::Pin,
     pub card: &'a Card,
     pub avatar: Option<&'a str>,
+    /// On air as far as a recent answer says (`LIVE_HOLDS`).
+    pub live: bool,
 }
 
 impl State {
@@ -61,10 +69,12 @@ impl State {
             .filter(|pin| pin.app() == app)
             .filter_map(|pin| {
                 let row = self.shelf.get(&pin.key())?;
+                let card = row.cards.first()?;
                 Some(ShelfCard {
                     pin,
-                    card: row.cards.first()?,
+                    card,
                     avatar: row.avatar.as_deref(),
+                    live: card.live && crate::clock::since(row.fetched) < LIVE_HOLDS,
                 })
             })
             .collect()
@@ -171,7 +181,14 @@ impl State {
             Response::Shelf { pin, cards, avatar } => {
                 // A row for a pin removed meanwhile is dropped.
                 if self.preferences.pins.iter().any(|kept| kept.key() == pin) {
-                    self.shelf.insert(pin, ShelfRow { cards, avatar });
+                    self.shelf.insert(
+                        pin,
+                        ShelfRow {
+                            cards,
+                            avatar,
+                            fetched: crate::clock::now(),
+                        },
+                    );
                     self.dirty = true;
                 }
                 vec![]
