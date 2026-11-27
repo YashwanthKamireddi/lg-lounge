@@ -45,6 +45,30 @@ pub(super) fn uninstall(out: &mut Scene, state: &State, assets: &Assets, id: &st
     );
 }
 
+/// Before a pin leaves the shelf: "Remove ETV Andhra Pradesh?", that it can come back from the
+/// phone, then Remove over Cancel.
+pub(super) fn unpin(out: &mut Scene, state: &State, assets: &Assets, key: &str) {
+    let title = state
+        .preferences
+        .pins
+        .iter()
+        .find(|pin| pin.key() == key)
+        .map_or("", |pin| pin.title.as_str());
+    let buttons = [i18n::t("remove"), i18n::t("cancel")];
+    alert(
+        out,
+        state,
+        assets,
+        Alert {
+            title: &i18n::format("unpinTitle", &[("title", title)]),
+            message: i18n::t("unpinMessage"),
+            buttons: &buttons,
+            destructive: Some(0),
+            figure: None,
+        },
+    );
+}
+
 /// Asked once on a TV that can have it: "Make Lounge your TV's Home?", what that means and
 /// that it can be undone, then Make Home over Not Now.
 pub(super) fn offer_home(out: &mut Scene, state: &State, assets: &Assets) {

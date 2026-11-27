@@ -154,6 +154,9 @@
   "saverNumeralsDetail": "12, 3, 6 and 9 in tall figures, fine hands",
   "pinned": "Pinned {title}",
   "unpinned": "Unpinned {title}",
+  "unpinTitle": "Remove {title}?",
+  "unpinMessage": "It leaves the YouTube shelf. You can pin it again from your phone.",
+  "remove": "Remove",
   "youtubePins": "YouTube",
   "pinsNone": "None",
   "pinsAdd": "Add from your phone",
@@ -203,7 +206,7 @@
   "homeScreen": "Home Screen",
   "accessibility": "Accessibility",
   "aboutGeneral": "The clock, Lounge as your TV's Home, and apps you've hidden.",
-  "aboutHomeScreen": "How Home looks: light or dark, app names, cover art and your picture.",
-  "aboutHomeScreenNoArt": "How Home looks: light or dark, app names and your picture.",
+  "aboutHomeScreen": "How Home looks: its clock, the screen saver, pinned YouTube channels, light or dark, app names, cover art and your picture.",
+  "aboutHomeScreenNoArt": "How Home looks: its clock, the screen saver, pinned YouTube channels, light or dark, app names and your picture.",
   "aboutAccessibility": "Larger names, a clear focus outline and less motion."
 }
