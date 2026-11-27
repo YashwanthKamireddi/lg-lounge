@@ -69,7 +69,7 @@ use sdl2::{
     event::{Event, WindowEvent},
     mouse::MouseButton,
 };
-use state::{Effect, Overlay, State, Target};
+use state::{Effect, Overlay, State};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -1250,33 +1250,13 @@ impl Shell {
                 mouse_y,
                 ..
             } if self.state.overlay.is_none() && self.presence.front(timestamp).is_some() => {
-                let over_favorites = self.state.page == state::Page::Home
-                    && pointer_position(&self.window, mouse_x, mouse_y).is_some_and(|(x, y)| {
-                        (64. ..1856.).contains(&x)
-                            && self.scene.controls.iter().any(|control| {
-                                matches!(control.target, Target::App(_))
-                                    && control.rect.contains(x, y)
-                            })
-                    });
-                if self.state.page == state::Page::Home && (x != 0 || over_favorites) {
-                    self.state.scroll_favorites(
-                        (if x != 0 { x } else { -y }) as f32 * state::HOME_TILE_PITCH,
-                    );
-                    self.remote.press = None;
-                } else {
+                {
                     let max = self
                         .scene
                         .controls
                         .iter()
                         .filter(|c| c.scrollable)
-                        .map(|c| {
-                            c.rect.y + c.rect.h + self.state.scroll
-                                - if self.state.page == state::Page::Home {
-                                    1041.6
-                                } else {
-                                    982.4
-                                }
-                        })
+                        .map(|c| c.rect.y + c.rect.h + self.state.scroll - 982.4)
                         .fold(0., f32::max);
                     self.state.scroll = (self.state.scroll - y as f32 * 90.).clamp(0., max.max(0.));
                 }
@@ -1744,7 +1724,7 @@ impl Shell {
         if let Some(path) = self.options.dump {
             let dump = serde_json::json!({ "page": self.state.page, "focus": self.state.focus,
                 "preferences": self.state.preferences, "apps": self.state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
-                "error": self.state.error, "scroll": self.state.scroll, "home_scroll": self.state.home_scroll, "subpage": self.state.subpage, "modal": self.state.overlay.is_some(), "weather": self.state.weather,
+                "error": self.state.error, "scroll": self.state.scroll, "subpage": self.state.subpage, "modal": self.state.overlay.is_some(), "weather": self.state.weather,
                 "inventory": self.state.inventory.apps,
                 "ui_text": self.scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
             std::fs::write(

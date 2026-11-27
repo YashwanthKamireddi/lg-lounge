@@ -189,52 +189,6 @@ impl State {
             return vec![];
         }
         if self.overlay.is_none() {
-            if self.page == Page::Home
-                && let Target::App(id) = &self.focus
-            {
-                let apps = self.apps();
-                if let Some(index) = apps.iter().position(|app| &app.id == id) {
-                    match direction {
-                        Direction::Left | Direction::Right => {
-                            let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
-                            } else {
-                                (index + 1).min(apps.len() - 1)
-                            };
-                            let id = apps[next].id.clone();
-                            self.focus(Target::App(id), controls);
-                        }
-                        Direction::Up => self.focus(Target::Nav(0), controls),
-                        Direction::Down => {
-                            let x = controls
-                                .iter()
-                                .find(|control| control.target == self.focus)
-                                .map_or(960., |control| control.rect.center().0);
-                            let top = controls
-                                .iter()
-                                .filter(|control| matches!(control.target, Target::Input(_)))
-                                .map(|control| control.rect.y)
-                                .fold(f32::INFINITY, f32::min);
-                            let next = controls
-                                .iter()
-                                .filter(|control| {
-                                    matches!(control.target, Target::Input(_))
-                                        && (control.rect.y - top).abs() < 1.
-                                })
-                                .min_by(|a, b| {
-                                    (a.rect.center().0 - x)
-                                        .abs()
-                                        .total_cmp(&(b.rect.center().0 - x).abs())
-                                })
-                                .map(|control| control.target.clone());
-                            if let Some(next) = next {
-                                self.focus(next, controls);
-                            }
-                        }
-                    }
-                    return vec![];
-                }
-            }
             if let Target::Choice(index) = self.focus {
                 let count = match self.subpage {
                     Some(Subpage::Clock | Subpage::Temperature) => 2,
@@ -504,12 +458,6 @@ impl State {
             // A notification is never a stop for the remote's arrows (the
             // pointer can still click it away).
             .filter(|candidate| candidate.target != Target::DismissNotice)
-            .filter(|candidate| {
-                self.page != Page::Home
-                    || !matches!(candidate.target, Target::App(_))
-                    || (candidate.rect.x >= HOME_STRIP_LEFT - 0.1
-                        && candidate.rect.x + candidate.rect.w <= HOME_STRIP_RIGHT + 0.1)
-            })
             .filter_map(|candidate| {
                 // Header controls never steal an Up route from the active tab.
                 if self.overlay.is_none()

@@ -70,13 +70,8 @@ pub(crate) fn hit(
             control.rect.contains(x, y)
                 && (!control.scrollable
                     || state.page == state::Page::Apps
-                    || ((64. ..1856.).contains(&x)
-                        && y >= 108.8
-                        && y < if state.page == state::Page::Home && state.moving.is_none() {
-                            1020.
-                        } else {
-                            968.
-                        }))
+                    // A scrolled list only answers inside its visible band.
+                    || ((64. ..1856.).contains(&x) && (108.8..968.).contains(&y)))
         })
         .map(|control| control.target.clone())
 }

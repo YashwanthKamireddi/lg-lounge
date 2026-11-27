@@ -45,7 +45,6 @@ pub(super) fn tile(
     // before anything moved.
     let (dx, dy) = match state.page {
         crate::state::Page::Apps => (0., state.shown_scroll - state.scroll),
-        crate::state::Page::Home => (state.shown_home_scroll - state.home_scroll, 0.),
         crate::state::Page::Settings => (0., 0.),
     };
     let drawn = Rect::new(rect.x - dx, rect.y - dy, rect.w, rect.h);

@@ -22,12 +22,10 @@ pub use scene::Scene;
 use crate::{
     i18n,
     renderer::{Backdrop, Color, Draw, TextStyle, WHITE},
-    state::{
-        FADE_OUT_MS, GRID_SCROLL, HOME_TILE_PITCH, Overlay, PAGE_MS, Page, Rect, State, Target,
-    },
+    state::{FADE_OUT_MS, GRID_SCROLL, Overlay, PAGE_MS, Page, Rect, State, Target},
 };
 use glass::{shelf_art, shelf_dissolve};
-use home::{home, library};
+use home::library;
 use overlays::{footer, header, inputs_panel, options, toast};
 use settings::settings;
 use shared::{c, detail_style};
@@ -40,7 +38,6 @@ use time::OffsetDateTime;
 
 const MAIN_TOP: f32 = 108.8;
 const FACE_HEIGHT: f32 = 194.;
-const GRID_PITCH: f32 = HOME_TILE_PITCH;
 // Apple's app icon shape (250x150 at r30) at tvOS 26's five-a-row size:
 // 324x194 at r39; focused it grows 1.14x, staying clear of its neighbours
 // (the 30 px gap).
@@ -352,7 +349,6 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         let grid = |page: Page, scroll: f32| match page {
             Page::Apps => (scroll / GRID_SCROLL).clamp(0., 1.),
             Page::Settings => 1.,
-            Page::Home => 0.,
         };
         let backdrop = |out: &Scene, page: Page, scroll: f32| match page {
             Page::Settings => settings_backdrop(out, state, assets),
@@ -386,9 +382,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             }
         }
     }
-    let main_bottom = if state.page == Page::Home && state.moving.is_none() {
-        1020.
-    } else if state.page == Page::Apps {
+    let main_bottom = if state.page == Page::Apps {
         1080.
     } else {
         968.
@@ -425,7 +419,6 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     } else {
         let content = out.draw.len();
         match state.page {
-            Page::Home => home(&mut out, state, assets, now),
             Page::Apps => library(&mut out, state, assets),
             Page::Settings => settings(&mut out, state, assets),
         }

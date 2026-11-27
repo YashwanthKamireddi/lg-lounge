@@ -1,6 +1,5 @@
 //! Colours, type styles and input descriptions every screen uses.
 use crate::{
-    i18n,
     model::Input,
     renderer::{Color, TextStyle},
 };
@@ -70,13 +69,5 @@ pub(super) fn input_icon(input: &Input) -> &'static str {
         "component"
     } else {
         "hdmi"
-    }
-}
-pub(super) fn input_status(input: &Input) -> String {
-    match input.connected {
-        Some(false) => i18n::t("noDevice").into(),
-        None => i18n::t("externalInput").into(),
-        Some(true) if input.title == input.port => i18n::t("connected").into(),
-        Some(true) => format!("{} · {}", input.title, i18n::t("connected")),
     }
 }
