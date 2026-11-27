@@ -205,9 +205,14 @@ impl State {
                 0.
             } else {
                 let y = 90. + GRID_GAP + (row - 1) as f32 * ROW_PITCH;
+                // A focused row ends inside the bottom safe area that overscanning TVs crop: its
+                // tile (194), focus lift (11), the gap to its name (26) and two lines of the
+                // larger names (76). Counting only the tile left the name under the bottom edge.
+                const ROW_REACH: f32 = 194. + 11. + 26. + 76.;
+                const SAFE_BOTTOM: f32 = 1020.;
                 let extra = (self.scroll - GRID_SCROLL)
                     .max(0.)
-                    .clamp((y + 210. - 1030.).max(0.), (y - 90.).max(0.));
+                    .clamp((y + ROW_REACH - SAFE_BOTTOM).max(0.), (y - 90.).max(0.));
                 GRID_SCROLL + extra
             };
             if self.scroll != previous {
