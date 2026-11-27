@@ -2757,3 +2757,37 @@ fn move_says_what_the_arrows_do_beside_the_app_in_hand() {
     state.moving = None;
     assert!(!hint(&state), "and goes when Move ends");
 }
+
+#[test]
+fn a_focused_grid_row_keeps_its_name_inside_the_safe_area() {
+    let mut state = ready();
+    state.preferences.large_names = true;
+    for n in 0..40 {
+        let mut app = App::new(
+            &format!("com.example.app{n}"),
+            &format!("An example app with a long name {n}"),
+        );
+        app.removable = true;
+        state.inventory.apps.push(app);
+    }
+    state.focus = Target::App(state.apps()[0].id.clone());
+    for _ in 0..9 {
+        state.direction(Direction::Down, &controls(&state));
+        // Where the glide settles.
+        state.shown_scroll = state.scroll;
+        let scene = view::scene(&state, &test_assets(), time::OffsetDateTime::UNIX_EPOCH);
+        let tile = scene
+            .controls
+            .iter()
+            .find(|control| control.target == state.focus)
+            .expect("the focused app is laid out")
+            .rect;
+        // Its control covers the tile and its name; with the focus lift it ends above 1020.
+        assert!(
+            tile.y + tile.h + 11. <= 1020.5,
+            "{:?} ends at {}",
+            state.focus,
+            tile.y + tile.h + 11.
+        );
+    }
+}
