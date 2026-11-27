@@ -2696,3 +2696,50 @@ fn weather_on_with_no_place_says_what_it_needs() {
     state.preferences.show_weather = false;
     assert!(!needs(&state));
 }
+
+#[test]
+fn a_live_card_reads_live_now_not_its_upload_age() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::{Card, Response};
+    let pin = Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    };
+    let card = |video: &str, live: bool| Card {
+        video: video.into(),
+        title: format!("{video} title"),
+        published: "1970-01-01T00:00:00+00:00".into(),
+        image: None,
+        live,
+    };
+    let meta = |live: bool| {
+        crate::clock::record();
+        let state = &mut ready();
+        state.pins_response(Response::Resolved(Ok(pin.clone())));
+        state.pins_response(Response::Shelf {
+            pin: pin.key(),
+            cards: vec![card("kJqrDRnWA9s", live)],
+            avatar: None,
+        });
+        state.focus = Target::App(crate::state::YOUTUBE.into());
+        state.direction(Direction::Up, &controls(state));
+        // Past the shelf's fade in.
+        state.tick();
+        crate::clock::step(std::time::Duration::from_secs(1));
+        state.tick();
+        let later = time::OffsetDateTime::UNIX_EPOCH + time::Duration::hours(4);
+        view::scene(state, &test_assets(), later)
+            .draw
+            .into_iter()
+            .filter_map(|draw| match draw {
+                crate::renderer::Draw::Text(value, ..) => Some(value),
+                _ => None,
+            })
+            .find(|line| line.starts_with("ETV Andhra Pradesh ·"))
+            .unwrap()
+    };
+    assert_eq!(meta(true), "ETV Andhra Pradesh · Live now");
+    assert_eq!(meta(false), "ETV Andhra Pradesh · 4 hours ago");
+}

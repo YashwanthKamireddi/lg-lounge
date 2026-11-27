@@ -3,6 +3,7 @@
 //! wallpaper and crossfades with it.
 use super::{Assets, Scene, TILE_RADIUS, shared::c, shared::text};
 use crate::{
+    i18n,
     renderer::{Draw, TextStyle},
     state::{Rect, State, Target},
 };
@@ -213,8 +214,15 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
     let shelf_card = &cards[focused];
     let title = clean_for(&shelf_card.card.title, &shelf_card.pin.title);
     let mut meta = shelf_card.pin.title.clone();
-    if let Some(ago) = ago(&shelf_card.card.published, now) {
-        meta = format!("{meta} · {ago}");
+    // A stream on air is live now, not as old as its upload: "4 hours ago" beside a LIVE badge
+    // read as a stream that had ended.
+    let when = if shelf_card.card.live {
+        Some(i18n::t("liveNow").to_owned())
+    } else {
+        ago(&shelf_card.card.published, now)
+    };
+    if let Some(when) = when {
+        meta = format!("{meta} · {when}");
     }
     lettering(
         out,
