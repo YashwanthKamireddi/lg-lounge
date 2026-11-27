@@ -357,6 +357,29 @@ impl State {
                 }
                 return vec![];
             }
+            // Left and Right stay on the row, as tvOS rows do: from the end of the last, part-full
+            // row the nearest tile to the right was a row up, and focus jumped there.
+            if self.page == Page::Apps
+                && let Target::App(id) = &self.focus
+                && matches!(direction, Direction::Left | Direction::Right)
+            {
+                let apps = self.apps();
+                if let Some(index) = apps.iter().position(|app| &app.id == id) {
+                    let column = index % APPS_COLUMNS;
+                    let next = match direction {
+                        Direction::Left if column > 0 => Some(index - 1),
+                        Direction::Right if column + 1 < APPS_COLUMNS && index + 1 < apps.len() => {
+                            Some(index + 1)
+                        }
+                        _ => None,
+                    };
+                    if let Some(next) = next {
+                        let target = Target::App(apps[next].id.clone());
+                        self.focus(target, controls);
+                    }
+                    return vec![];
+                }
+            }
             if self.page == Page::Apps
                 && let Target::App(id) = &self.focus
                 && matches!(direction, Direction::Up | Direction::Down)
