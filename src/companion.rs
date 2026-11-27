@@ -681,23 +681,29 @@ const draw = (target, w, h) => {
 const show = () => { if (photo) { clamp(); draw(canvas, canvas.width, canvas.height); } };
 addEventListener('resize', () => { size(); show(); });
 size();
+let backdropUrl = null;
 $('file').addEventListener('change', async (event) => {
   const file = event.target.files[0];
+  // Cleared, so choosing the same photo again (after a failed send) still counts as a choice.
+  event.target.value = '';
   if (!file) return;
   status.textContent = '';
   try {
     // Older Safari can't make a bitmap of every photo it can show: then through an image.
     photo = await createImageBitmap(file).catch(() => new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
-      image.src = URL.createObjectURL(file);
+      const image = new Image(), url = URL.createObjectURL(file);
+      image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = () => { URL.revokeObjectURL(url); reject(); };
+      image.src = url;
     }));
     cover = Math.max(width / photo.width, height / photo.height);
     x = photo.width / 2; y = photo.height / 2; zoom.value = 1;
     tools.hidden = false;
     // The page takes on the photo, blurred behind the glass.
-    $('backdrop').style.background = `center / cover no-repeat url(${URL.createObjectURL(file)})`;
+    // One photo's worth held at a time: the last pick's is let go (a phone has little to spare).
+    if (backdropUrl) URL.revokeObjectURL(backdropUrl);
+    backdropUrl = URL.createObjectURL(file);
+    $('backdrop').style.background = `center / cover no-repeat url(${backdropUrl})`;
     size(); show();
     send.disabled = false;
   } catch {
