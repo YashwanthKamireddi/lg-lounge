@@ -20,6 +20,8 @@ pub struct Scene {
     /// The draws of the tile a context menu acts on: dimming leaves them
     /// lit, so that app stands out while the rest of the screen falls back.
     pub(super) lit: Option<std::ops::Range<usize>>,
+    /// The room the time pill wants for the weather this frame (`State::note_pill_extra`).
+    pub pill_extra: Option<f32>,
 }
 impl Scene {
     pub(super) fn new(theme: super::theme::Theme) -> Self {
@@ -28,6 +30,7 @@ impl Scene {
             draw: Vec::new(),
             controls: Vec::new(),
             modal: None,
+            pill_extra: None,
             settings_range: None,
             page: None,
             lit: None,

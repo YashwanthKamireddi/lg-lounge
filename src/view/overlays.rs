@@ -101,7 +101,11 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
     } else {
         0.
     };
-    let text_width = date_width + clock_width + extra;
+    // The weather's room glides open and shut (`State::pill_extra_shown`); the reading fades
+    // in at its place as it opens.
+    out.pill_extra = Some(extra);
+    let extra_shown = state.pill_extra_shown().unwrap_or(extra);
+    let text_width = date_width + clock_width + extra_shown;
     let lead = if inputs {
         inset + 8. * k
     } else {
@@ -206,9 +210,16 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
             ink,
             false,
         );
-        x += clock_width + gap;
     }
     if let Some((text, icon)) = temperature {
+        // At its final place, just before the avatar's margin, coming in as its room opens.
+        let alpha = if extra > 0. && state.pill_extra_opening() {
+            (extra_shown / extra).min(1.)
+        } else {
+            1.
+        };
+        let weather_first = out.draw.len();
+        x = pill.x + pill.w - trail - if avatar { size + inset } else { inset } - extra + gap;
         out.icon(
             assets,
             &icon,
@@ -223,6 +234,9 @@ pub(super) fn header(out: &mut Scene, state: &State, assets: &Assets, now: Offse
             ink,
             false,
         );
+        if alpha < 1. {
+            out.fade(weather_first, alpha * alpha, 1.);
+        }
     }
     out.fade(first, fade, 1.);
 }

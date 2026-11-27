@@ -52,6 +52,8 @@ pub const HOME_TILE_WIDTH: f32 = 324.;
 /// How long focus takes to land on the next control: short, so the highlight is where the
 /// press went before the eye looks for it.
 pub const FOCUS_MS: f32 = 180.;
+/// The time pill widens or narrows for the weather this fast.
+pub const PILL_GLIDE_MS: f32 = 320.;
 /// The YouTube shelf and the clock trade places this fast.
 pub const SHELF_FADE_MS: f32 = 240.;
 /// tvOS 26 home, five large icons a row (324x194, Apple's 5:3): in Top Shelf
@@ -380,6 +382,9 @@ pub struct State {
     /// The drawn scroll glides toward `scroll`; layout and navigation always use the exact
     /// target.
     pub shown_scroll: f32,
+    /// The weather's room in the time pill gliding open or shut: from, to, since when. The
+    /// reading arrives a few seconds after Home appears, and the pill jumped wider in one frame.
+    pill_extra: Option<(f32, f32, Instant)>,
     /// How fast the drawn scroll is gliding (px/s).
     scroll_velocity: f32,
     shown_page: Page,
@@ -586,6 +591,7 @@ impl State {
             last_focus: Target::Nav(0),
             shown_scroll: 0.,
             scroll_velocity: 0.,
+            pill_extra: None,
             shown_page: Page::Apps,
             left: (Page::Apps, 0.),
             last_tick: crate::clock::now(),
@@ -865,6 +871,45 @@ impl State {
         }
     }
 
+    /// How wide the weather's part of the pill is drawn while it glides; None before the pill
+    /// has first asked (it then takes its room as it is). A new width holds where it was until
+    /// the glide toward it begins (the frame after it is first asked for): no frame jumps.
+    pub fn pill_extra_shown(&self) -> Option<f32> {
+        let (from, to, since) = self.pill_extra?;
+        let t = (crate::clock::since(since).as_secs_f32() * 1000. / PILL_GLIDE_MS).min(1.);
+        Some(from + (to - from) * t * t * (3. - 2. * t))
+    }
+
+    /// The weather's room is opening from nothing (the reading arriving), rather than a reading
+    /// changing width: only then does the reading fade in.
+    pub fn pill_extra_opening(&self) -> bool {
+        self.pill_extra
+            .is_some_and(|(from, to, _)| from == 0. && to > 0.)
+    }
+
+    fn pill_extra_gliding(&self) -> bool {
+        self.pill_extra.is_some_and(|(from, to, since)| {
+            from != to && crate::clock::since(since).as_secs_f32() * 1000. < PILL_GLIDE_MS
+        })
+    }
+
+    /// The weather's room the pill asked for this frame: a new width starts a glide from
+    /// wherever it is drawn now (the first, and with reduced motion every one, is taken at once).
+    pub fn note_pill_extra(&mut self, target: f32) {
+        match self.pill_extra {
+            Some((_, to, _)) if to == target => {}
+            Some(_) if !self.preferences.reduced_motion => {
+                let shown = self.pill_extra_shown().unwrap_or(target);
+                self.pill_extra = Some((shown, target, crate::clock::now()));
+                self.dirty = true;
+            }
+            _ => {
+                self.pill_extra = Some((target, target, crate::clock::now()));
+                self.dirty = true;
+            }
+        }
+    }
+
     pub fn page_index(&self) -> usize {
         match self.page {
             Page::Apps => 1,
@@ -889,6 +934,7 @@ impl State {
             || self.focus_from.is_some()
             || self.page_since.is_some()
             || self.shown_scroll != self.scroll
+            || self.pill_extra_gliding()
             || self.shelf_from.is_some()
             || self.shelf_pending.is_some()
             || self.settings_since.is_some()

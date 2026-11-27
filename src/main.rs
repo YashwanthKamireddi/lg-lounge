@@ -143,11 +143,16 @@ fn compose(
         state.settings_ghost = Some(previous.draw[range].to_vec());
     }
     let scene = view::scene(state, assets, now);
-    if !state.pointer && state.overlay.is_none() && state.reveal_focus(&scene.controls) {
+    let scene = if !state.pointer && state.overlay.is_none() && state.reveal_focus(&scene.controls)
+    {
         view::scene(state, assets, now)
     } else {
         scene
+    };
+    if let Some(extra) = scene.pill_extra {
+        state.note_pill_extra(extra);
     }
+    scene
 }
 
 /// SDL's clock, the one it stamps input events with.
