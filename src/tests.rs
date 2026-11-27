@@ -2614,3 +2614,32 @@ fn the_analog_sweep_stops_while_the_shelf_covers_the_clock() {
     state.tick();
     assert!(state.ticking(), "the clock is back");
 }
+
+#[test]
+fn the_shelf_s_pictures_stay_on_the_gpu_while_the_grid_covers_them() {
+    use crate::model::{Pin, PinKind};
+    use crate::pins_service::{Card, Response};
+    let mut state = ready();
+    let pin = Pin {
+        kind: PinKind::Channel,
+        id: "UCJi8M0hRKjz8SLPvJKEVTOg".into(),
+        title: "ETV Andhra Pradesh".into(),
+        avatar: None,
+    };
+    state.preferences.pins.push(pin.clone());
+    state.pins_response(Response::Shelf {
+        pin: pin.key(),
+        cards: vec![Card {
+            video: "kJqrDRnWA9s".into(),
+            title: "News".into(),
+            published: String::new(),
+            image: Some("/cache/kJqrDRnWA9s.jpg".into()),
+        }],
+        avatar: Some("/cache/avatar-UCJi8M0hRKjz8SLPvJKEVTOg.jpg".into()),
+    });
+    // Focus is deep in the grid, far from YouTube: the pictures are kept all the same.
+    state.focus = Target::App("plex".into());
+    let kept = view::resident(&state, &test_assets());
+    assert!(kept.contains(&"/cache/kJqrDRnWA9s.jpg".to_owned()));
+    assert!(kept.contains(&"/cache/avatar-UCJi8M0hRKjz8SLPvJKEVTOg.jpg".to_owned()));
+}
