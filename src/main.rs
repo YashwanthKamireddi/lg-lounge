@@ -17,7 +17,6 @@ mod effects;
 mod font;
 mod helper;
 mod history;
-mod hotstar;
 // Runs only on the TV, from `helper`.
 #[cfg_attr(not(feature = "webos"), allow(dead_code))]
 #[path = "home-mount.rs"]

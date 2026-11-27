@@ -43,7 +43,7 @@ pub(crate) fn effects(
             }
             Effect::ClockFormat(hour_24) => crate::time_format::set(hour_24),
             Effect::Launch(id) => launch(state, platform, writer, id, None),
-            // A pin: a YouTube video, a JioHotstar show, in its app.
+            // A pin's video, in its app.
             Effect::Open(app, params) => launch(state, platform, writer, app, Some(params)),
             Effect::Pins(command) => pins.send(command),
             Effect::Quit => {

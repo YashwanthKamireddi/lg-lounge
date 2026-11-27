@@ -167,15 +167,12 @@ impl State {
         }
     }
 
-    /// What OK on a shelf card opens: a YouTube video, or a JioHotstar show's page.
+    /// What OK on a shelf card opens: its video, in the pin's app.
     pub(super) fn open_card(&self, index: usize) -> Vec<Effect> {
         let Some(card) = self.shelf_cards().get(index).cloned() else {
             return vec![];
         };
-        let params = match card.pin.kind {
-            crate::model::PinKind::Show => crate::hotstar::launch_params(&card.pin.id),
-            _ => crate::youtube::launch_params(&card.card.video),
-        };
+        let params = crate::youtube::launch_params(&card.card.video);
         vec![Effect::Open(card.pin.app().into(), params)]
     }
 
