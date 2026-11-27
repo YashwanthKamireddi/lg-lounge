@@ -20,6 +20,12 @@ const VISIBLE: usize = 4;
 /// A title as the shelf shows it: no emoji (the TV's font has none) and no live marker, which
 /// becomes the card's LIVE badge; and whether it was live.
 fn clean(title: &str) -> (String, bool) {
+    clean_for(title, "")
+}
+
+/// As `clean`, also dropping what repeats the line above it: hashtags, and a `|`-separated part
+/// that is just the channel's name (`… | Full Bulletin | ETV Andhra Pradesh#etvannadata`).
+fn clean_for(title: &str, channel: &str) -> (String, bool) {
     let live = title.contains("LIVE") || title.contains('🔴');
     let text: String = title
         .chars()
@@ -29,8 +35,26 @@ fn clean(title: &str) -> (String, bool) {
     if let Some(stripped) = text.trim_end().strip_suffix("LIVE") {
         text = stripped.to_owned();
     }
-    let words: Vec<&str> = text.split_whitespace().collect();
-    let text = words.join(" ");
+    // Hashtags, also glued to a word ("Pradesh#etvannadata").
+    let mut plain = String::with_capacity(text.len());
+    let mut tag = false;
+    for c in text.chars() {
+        if c == '#' {
+            tag = true;
+        } else if c.is_whitespace() || c == '|' {
+            tag = false;
+        }
+        if !tag {
+            plain.push(c);
+        }
+    }
+    let channel = channel.trim().to_lowercase();
+    let parts: Vec<String> = plain
+        .split('|')
+        .map(|part| part.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|part| !part.is_empty() && (channel.is_empty() || part.to_lowercase() != channel))
+        .collect();
+    let text = parts.join(" | ");
     let text = text
         .trim_end_matches([':', '|', '-', '·'])
         .trim()
@@ -167,7 +191,7 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
     }
     // The focused card's video and channel, above the row.
     let shelf_card = &cards[focused];
-    let (title, _) = clean(&shelf_card.card.title);
+    let (title, _) = clean_for(&shelf_card.card.title, &shelf_card.pin.title);
     let mut meta = shelf_card.pin.title.clone();
     if let Some(ago) = ago(&shelf_card.card.published, now) {
         meta = format!("{meta} · {ago}");
@@ -203,6 +227,31 @@ mod tests {
         assert_eq!(
             clean("Weekend news roundup"),
             ("Weekend news roundup".into(), false)
+        );
+    }
+
+    #[test]
+    fn titles_lose_hashtags_and_the_channel_s_own_name() {
+        assert_eq!(
+            clean_for(
+                "అన్నదాత | 27th November 2026 | Annadata | Full Bulletin | ETV Andhra Pradesh#etvannadata",
+                "ETV Andhra Pradesh"
+            )
+            .0,
+            "అన్నదాత | 27th November 2026 | Annadata | Full Bulletin"
+        );
+        assert_eq!(
+            clean_for(
+                "Kishan Reddy LIVE: Public Meeting | NTV Telugu #news #live",
+                "NTV Telugu"
+            )
+            .0,
+            "Kishan Reddy LIVE: Public Meeting"
+        );
+        // A channel name inside a sentence stays: only a part that is just the name goes.
+        assert_eq!(
+            clean_for("Why ETV Telugu changed its logo", "ETV Telugu").0,
+            "Why ETV Telugu changed its logo"
         );
     }
 
