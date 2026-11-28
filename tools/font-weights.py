@@ -67,37 +67,6 @@ if len(sys.argv) > 2:
     clock.save(directory / "font-clock.ttf")
 else:
     (directory / "font-clock.ttf").write_bytes((directory / "font-display-500.ttf").read_bytes())
-# The Contour screen saver's figures (tv/screensaver.qml): six cuts of the digits from narrow
-# and light to wide and heavy, the hour at the hand in the widest, as the watch's Contour
-# figures swell. SF Pro varies width and weight; Inter, weight only. Each is a family of its
-# own, as Qt picks fonts by family name.
-for level in range(6):
-    t = level / 5
-    if len(sys.argv) > 2:
-        cut = TTFont(sys.argv[2])
-        values = {"wdth": 40 + 110 * t, "wght": 480 + 340 * t, "opsz": 28}
-    else:
-        cut = TTFont(directory / "font.ttf")
-        cut_axes = {axis.axisTag for axis in cut["fvar"].axes} if "fvar" in cut else set()
-        values = {"wght": 380 + 420 * t} if "wght" in cut_axes else {}
-        if "opsz" in cut_axes:
-            values["opsz"] = next(a for a in cut["fvar"].axes if a.axisTag == "opsz").maxValue
-    options = subset.Options()
-    options.layout_features = ["tnum", "kern"]
-    options.notdef_outline = True
-    subsetter = subset.Subsetter(options=options)
-    subsetter.populate(text="0123456789")
-    subsetter.subset(cut)
-    if values:
-        cut = instantiateVariableFont(cut, values)
-    family = f"Lounge Contour {level}"
-    for record in list(cut["name"].names):
-        if record.nameID in (1, 2, 4, 6, 16, 17):
-            cut["name"].removeNames(nameID=record.nameID)
-    for name_id, value in ((1, family), (2, "Regular"), (4, family), (6, family.replace(" ", ""))):
-        cut["name"].setName(value, name_id, 3, 1, 0x409)
-        cut["name"].setName(value, name_id, 1, 0, 0)
-    cut.save(directory / f"font-contour-{level}.ttf")
 # Scripts SF Pro and Inter do not draw, shaped with rustybuzz (src/renderer/text.rs): Google's
 # Noto Sans (OFL), one semibold cut each, as the interface's titles are.
 fonts = Path(__file__).resolve().parent.parent / "assets" / "fonts"

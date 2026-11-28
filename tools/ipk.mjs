@@ -90,7 +90,6 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'licenses/noto.txt',
     'assets/font-metrics.json',
     'assets/font-clock.ttf',
-    ...[0, 1, 2, 3, 4, 5].map((level) => `assets/font-contour-${level}.ttf`),
     'assets/font-telugu.ttf',
     'assets/font-devanagari.ttf',
     'assets/font-tamil.ttf',
