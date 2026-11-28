@@ -566,47 +566,48 @@ WebOSWindow {
         }
     }
 
-    // Contour, after Apple Watch's, made for a TV: the twelve hours evenly round the screen's
-    // edge, upright so they read from the sofa. As the watch's figures swell toward the hour,
-    // the hour the hour hand is at is set in the widest, heaviest cut, largest and brightest,
-    // its neighbours a cut narrower, and the far side of the dial narrow, light and quiet: the
-    // time reads at a glance across the room, and the swell moves on with the hand.
+    // The dial Contour and California share with Analog: the same squircle of near-black glass
+    // with a faint lit edge, the same size, so every face with hands reads as one watch.
+    Component {
+        id: dialGlass
+        Rectangle {
+            radius: 244
+            antialiasing: true
+            gradient: Gradient {
+                GradientStop { position: 0; color: "#1b1b1f" }
+                GradientStop { position: 1; color: "#0b0b0d" }
+            }
+            border.width: 2
+            border.color: Qt.rgba(1, 1, 1, 0.13)
+        }
+    }
+    // How far from a dial's centre its outline `inset` inside lies along `angle` (radians
+    // clockwise from 12): Analog's squircle.
+    function dialReach(angle, inset) {
+        var a = 405 - inset, b = 382 - inset
+        var x = Math.abs(Math.sin(angle) / a), y = Math.abs(Math.cos(angle) / b)
+        return Math.pow(Math.pow(x, 4) + Math.pow(y, 4), -1 / 4)
+    }
+
+    // Contour, after Apple Watch's: every hour round the inside of the dial's edge. As the
+    // watch's figures swell toward the hour, the hour the hour hand is at is set in the widest,
+    // heaviest cut, largest and brightest, its neighbours a cut narrower, and the far side of
+    // the dial narrow, light and quiet; the swell moves on with the hand.
     Item {
         id: contour
         visible: window.face === "contour"
-        width: window.width
-        height: window.height
-        x: drift.dx
-        y: drift.dy
-        // The line the hours sit on: a rounded rectangle, half sizes `a` by `b`.
-        readonly property real a: 800
-        readonly property real b: 410
+        width: 810
+        height: 764
+        x: (window.width - width) / 2 + drift.dx
+        y: (window.height - height) / 2 + drift.dy
         readonly property real hand: ((window.now.getHours() % 12) * 60 + window.now.getMinutes()) / 60
-        // The twelve places, evenly along the line's length from 12 at the top centre (where
-        // hands pointing at them would meet it, 11, 12 and 1 crowded the top of a wide screen
-        // and its sides stood empty); 12, 3, 6 and 9 still sit square on the hands.
-        readonly property var spots: {
-            var steps = 1440, points = [], lengths = [0]
-            for (var i = 0; i <= steps; i++) {
-                var angle = i / steps * 2 * Math.PI
-                var distance = window.edge(angle, a, b, 6)
-                points.push({ x: distance * Math.sin(angle), y: -distance * Math.cos(angle) })
-                if (i > 0) {
-                    var dx = points[i].x - points[i - 1].x, dy = points[i].y - points[i - 1].y
-                    lengths.push(lengths[i - 1] + Math.sqrt(dx * dx + dy * dy))
-                }
-            }
-            var spots = [], at = 0
-            for (var hour = 1; hour <= 12; hour++) {
-                var wanted = hour / 12 * lengths[steps]
-                while (at < steps && lengths[at] < wanted) at++
-                spots.push(points[at])
-            }
-            return spots
-        }
+        Loader { anchors.fill: parent; sourceComponent: dialGlass }
         Repeater {
             model: 12
             Text {
+                readonly property real angle: (index + 1) / 12 * 2 * Math.PI
+                // The wider an hour is set, the further in it stands, clear of the edge.
+                readonly property real distance: window.dialReach(angle, 92 + 46 * near * Math.abs(Math.sin(angle)))
                 // How near the hour hand this hour is: 1 at it, falling away over two hours.
                 readonly property real near: {
                     var apart = Math.abs((index + 1) % 12 - contour.hand)
@@ -617,62 +618,61 @@ WebOSWindow {
                 readonly property int cut: Math.round(near * 5)
                 text: index + 1
                 color: "white"
-                opacity: 0.3 + 0.7 * near
+                opacity: 0.34 + 0.66 * near
                 font.family: contourCuts.count === 6 && contourCuts.itemAt(cut)
                     ? contourCuts.itemAt(cut).family : figures.name
-                font.pixelSize: 150
-                width: 420
-                height: 180
+                font.pixelSize: 96
+                width: 260
+                height: 120
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                x: window.width / 2 + contour.spots[index].x - width / 2
-                y: window.height / 2 + contour.spots[index].y - height / 2
-                scale: 0.7 + 0.3 * near
+                x: contour.width / 2 + distance * Math.sin(angle) - width / 2
+                y: contour.height / 2 - distance * Math.cos(angle) - height / 2
+                scale: 0.8 + 0.2 * near
                 Behavior on scale { NumberAnimation { duration: 900; easing.type: Easing.InOutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.InOutCubic } }
             }
         }
         Loader {
             sourceComponent: handsComponent
-            property real cx: window.width / 2
-            property real cy: window.height / 2
-            property real hour: 210
-            property real minute: 300
-            property real second: 320
+            property real cx: contour.width / 2
+            property real cy: contour.height / 2
+            property real hour: 170
+            property real minute: 250
+            property real second: 270
             property bool running: contour.visible
             property color ink: "white"
         }
     }
 
-    // California, as Apple Watch's full-screen California dial with Arabic figures: a triangle
-    // at 12, bars at 3, 6 and 9, the other hours in figures, and a minute track round the
-    // screen's edge; each mark where a hand pointing at it meets the
-    // edge, so the hands read true. Warm ivory on black, the second hand red.
+    // California, after Apple Watch's California dial with Arabic figures: a minute track
+    // round the dial's edge, a triangle at 12, bars at 3, 6 and 9, the other hours in figures,
+    // in warm ivory, the second hand red.
     Item {
         id: california
         visible: window.face === "california"
-        width: window.width
-        height: window.height
-        x: drift.dx
-        y: drift.dy
+        width: 810
+        height: 764
+        x: (window.width - width) / 2 + drift.dx
+        y: (window.height - height) / 2 + drift.dy
         readonly property color ivory: "#f1e7d0"
-        // The minute track, the hours longer, along the screen's edge.
+        Loader { anchors.fill: parent; sourceComponent: dialGlass }
+        // The minute track, the hours longer.
         Repeater {
             model: 60
             Item {
                 readonly property bool hour: index % 5 === 0
                 readonly property real angle: index / 60 * 2 * Math.PI
-                readonly property real distance: window.edge(angle, 900, 482, 10)
-                x: window.width / 2 + distance * Math.sin(angle)
-                y: window.height / 2 - distance * Math.cos(angle)
+                x: california.width / 2
+                y: california.height / 2
                 rotation: index * 6
                 Rectangle {
                     width: hour ? 6 : 3
-                    height: hour ? 30 : 16
+                    height: hour ? 26 : 14
                     radius: width / 2
                     antialiasing: true
                     x: -width / 2
-                    y: 0
+                    y: -window.dialReach(parent.angle, 24)
                     color: hour ? california.ivory : Qt.rgba(0.95, 0.91, 0.82, 0.4)
                 }
             }
@@ -681,18 +681,18 @@ WebOSWindow {
             model: ["1", "2", "bar", "4", "5", "bar", "7", "8", "bar", "10", "11", "triangle"]
             Item {
                 readonly property real angle: (index + 1) / 12 * 2 * Math.PI
-                readonly property real distance: window.edge(angle, 770, 372, 10)
-                x: window.width / 2 + distance * Math.sin(angle)
-                y: window.height / 2 - distance * Math.cos(angle)
+                readonly property real distance: window.dialReach(angle, 104)
+                x: california.width / 2 + distance * Math.sin(angle)
+                y: california.height / 2 - distance * Math.cos(angle)
                 Text {
                     visible: modelData !== "bar" && modelData !== "triangle"
                     text: modelData
                     color: california.ivory
                     font.family: figures.name
-                    font.pixelSize: 124
+                    font.pixelSize: 84
                     font.weight: Font.DemiBold
-                    width: 300
-                    height: 150
+                    width: 200
+                    height: 110
                     x: -width / 2
                     y: -height / 2
                     horizontalAlignment: Text.AlignHCenter
@@ -701,9 +701,9 @@ WebOSWindow {
                 // 3, 6 and 9: a bar along the hand that points at it.
                 Rectangle {
                     visible: modelData === "bar"
-                    width: 104
-                    height: 24
-                    radius: 12
+                    width: 66
+                    height: 18
+                    radius: 9
                     antialiasing: true
                     x: -width / 2
                     y: -height / 2
@@ -713,8 +713,8 @@ WebOSWindow {
                 // 12: a triangle pointing in.
                 Canvas {
                     visible: modelData === "triangle"
-                    width: 104
-                    height: 92
+                    width: 66
+                    height: 58
                     x: -width / 2
                     y: -height / 2
                     antialiasing: true
@@ -734,24 +734,17 @@ WebOSWindow {
         }
         Loader {
             sourceComponent: handsComponent
-            property real cx: window.width / 2
-            property real cy: window.height / 2
-            property real hour: 200
-            property real minute: 300
-            property real second: 340
+            property real cx: california.width / 2
+            property real cy: california.height / 2
+            property real hour: 170
+            property real minute: 250
+            property real second: 280
             property color ink: california.ivory
             property bool running: california.visible
             property color accent: "#ff3b30"
         }
     }
 
-    // How far from the centre a rounded rectangle of half sizes `a` by `b` lies along `angle`
-    // (radians clockwise from 12): a superellipse of power `power`, its corners as round as a
-    // TV's picture's.
-    function edge(angle, a, b, power) {
-        var x = Math.abs(Math.sin(angle)) / a, y = Math.abs(Math.cos(angle)) / b
-        return Math.pow(Math.pow(x, power) + Math.pow(y, power), -1 / power)
-    }
 
     // A drift of a few pixels about the exact centre: the face reads as centred, as a watch face
     // is, while no pixel holds the same light all night. (LG's own pixel shift guards OLED panels
