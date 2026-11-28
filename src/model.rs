@@ -173,7 +173,7 @@ pub enum SaverFace {
     Numerals,
     /// The hours around the screen's edge, the hour it is lit.
     Contour,
-    /// Figures, a triangle at 12 and bars at 3, 6 and 9, a minute track around the edge.
+    /// Every hour in figures, a minute track around the edge.
     California,
     /// Another face each time the saver starts.
     Shuffle,

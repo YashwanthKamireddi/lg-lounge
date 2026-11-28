@@ -103,6 +103,29 @@ WebOSWindow {
         id: figures
         source: window.assets + "font-display-600.ttf"
     }
+    // Contour's figures: six cuts of SF Pro from narrow and light to wide and heavy
+    // (tools/font-weights.py), with what the layout needs to know of each.
+    Repeater {
+        id: contourCuts
+        model: 6
+        Item {
+            readonly property string family: cut.name
+            // Per pixel of font size: how tall the figures' ink stands and how far it rises
+            // above the baseline; and a figure's width per pixel of ink height.
+            readonly property real inkHeight: Math.max(0.01, metrics.tightBoundingRect("0123456789").height / 100)
+            readonly property real inkRise: -metrics.tightBoundingRect("0123456789").y / 100
+            function advance(text) { return metrics.tightBoundingRect(text).width / 100 / inkHeight }
+            FontLoader {
+                id: cut
+                source: window.assets + "font-contour-" + index + ".ttf"
+            }
+            FontMetrics {
+                id: metrics
+                font.family: cut.name
+                font.pixelSize: 100
+            }
+        }
+    }
     // The clock's own tall, narrow figures.
     FontLoader {
         id: tall
@@ -555,14 +578,11 @@ WebOSWindow {
     }
 
     // Contour, after Apple Watch's, across a TV's whole screen. The hours run as a band round
-    // the screen's edge, every figure upright: 11, 12 and 1 along the top, 2, 3 and 4 down the
-    // right, 7, 6 and 5 along the bottom, 8, 9 and 10 up the left, a two-figure hour's digits
-    // following the band (side by side along the top and bottom, one above the other down the
-    // sides). Each figure fills its stretch of the band as the watch's do: about the hour
-    // hand the band is deep and the figures bold, and toward the far side it thins until the
-    // figures are fine lines. Drawn as rounded strokes of even weight (`digitLines`), so a
-    // figure fills any shape without its strokes stretching. Cream on black, white hands, a
-    // red second hand.
+    // the screen's edge, each figure upright and flush to its edge: 11, 12 and 1 along the
+    // top, 2, 3 and 4 down the right, 7, 6 and 5 along the bottom, 8, 9 and 10 up the left.
+    // As the watch's figures swell toward the hour, the hours about the hour hand are set
+    // large in SF Pro's wide, heavy cuts, and the far side of the dial small, narrow and light
+    // (six cuts, tools/font-weights.py). Cream on black, white hands, a red second hand.
     Item {
         id: contour
         visible: window.face === "contour"
@@ -571,95 +591,73 @@ WebOSWindow {
         x: drift.dx
         y: drift.dy
         readonly property color ink: "#f4dfb6"
-        // The band's outer edge, half sizes `a` by `b`; how deep it is at the hand's hour and
-        // at the far side; the black between two figures, and between two digits.
-        readonly property real a: window.width / 2 - 44
-        readonly property real b: window.height / 2 - 44
-        readonly property real deepest: 230
-        readonly property real thinnest: 58
-        readonly property real gap: 26
+        // The band's outer edge, in from the screen's; how tall the hand's hour stands and how
+        // tall the farthest; the least black between a row's end and the column beside it.
+        readonly property real margin: 56
+        readonly property real largest: 260
+        readonly property real smallest: 92
+        readonly property real gap: 40
         readonly property int minuteOfDay: window.now.getHours() * 60 + window.now.getMinutes()
-        // Every digit's box (relative to the screen's centre), its figure and stroke weight.
-        readonly property var digits: {
+        // Each hour: its figures, cut, size (its ink's height) and centre.
+        readonly property var hours: {
+            if (contourCuts.count !== 6) return []
             var hand = (minuteOfDay % 720) / 60
-            var near = [], depth = []
+            var hours = []
             for (var i = 0; i < 12; i++) {
                 var apart = Math.abs(i - hand)
                 apart = Math.min(apart, 12 - apart)
-                near.push(Math.exp(-apart * apart / 2.6))
-                depth.push(thinnest + (deepest - thinnest) * near[i])
+                var near = Math.exp(-apart * apart / 2.6)
+                var cut = Math.round(near * 5)
+                var font = contourCuts.itemAt(cut)
+                if (!font) return []
+                var size = smallest + (largest - smallest) * near
+                var text = i === 0 ? "12" : String(i)
+                hours.push({ text: text, cut: cut, size: size, w: font.advance(text) * size, h: size })
             }
-            // Each edge: its hours in reading order, the stretch they share (from, to), and how
-            // a box is made from a stretch and a depth. Top and bottom stop short of the
-            // corners by the depth of the side figure there, so no two figures meet.
-            var edges = [
-                { hours: [11, 0, 1], from: -a + depth[10] + gap, to: a - depth[2] - gap, across: true,
-                  box: function (s, t, d) { return { x: s, y: -b, w: t - s, h: d } } },
-                { hours: [2, 3, 4], from: -b, to: b, across: false,
-                  box: function (s, t, d) { return { x: a - d, y: s, w: d, h: t - s } } },
-                { hours: [7, 6, 5], from: -a + depth[8] + gap, to: a - depth[4] - gap, across: true,
-                  box: function (s, t, d) { return { x: s, y: b - d, w: t - s, h: d } } },
-                { hours: [10, 9, 8], from: -b, to: b, across: false,
-                  box: function (s, t, d) { return { x: -a, y: s, w: d, h: t - s } } }
-            ]
-            var placed = []
-            for (var e = 0; e < 4; e++) {
-                var edge = edges[e], weights = [], sum = 0
-                for (var j = 0; j < 3; j++) {
-                    var hour = edge.hours[j]
-                    var weight = (hour === 0 || hour >= 10 ? 1.45 : 1) * (0.55 + 1.6 * near[hour])
-                    weights.push(weight)
-                    sum += weight
-                }
-                var at = edge.from, room = edge.to - edge.from - 2 * gap
-                for (var k = 0; k < 3; k++) {
-                    var hour2 = edge.hours[k], length = weights[k] / sum * room
-                    var text = hour2 === 0 ? "12" : String(hour2)
-                    // A two-figure hour: its digits share the stretch, a "1" taking less.
-                    var shares = [], total = 0
-                    for (var c = 0; c < text.length; c++) {
-                        shares.push(text[c] === "1" ? 0.4 : 1)
-                        total += shares[c]
-                    }
-                    var between = depth[hour2] * 0.16 * (text.length - 1)
-                    // A figure stretches only so far before it stops reading as itself: a
-                    // digit at most twice as wide as the band is deep along the top and bottom,
-                    // at most two and a half times as tall as it is deep down the sides. A
-                    // figure with more room than that sits in the middle of its stretch.
-                    var most = depth[hour2] * (edge.across ? 2 : 2.6) * total + between
-                    var used = Math.min(length, most)
-                    var start = at + (length - used) / 2
-                    for (var d = 0; d < text.length; d++) {
-                        var part = (used - between) * shares[d] / total
-                        var box = edge.box(start, start + part, depth[hour2])
-                        box.digit = text[d]
-                        box.weight = Math.max(4, Math.min(box.w, box.h) * (0.09 + 0.17 * near[hour2]))
-                        placed.push(box)
-                        start += part + depth[hour2] * 0.16
-                    }
-                    at += length + gap
+            var left = -window.width / 2 + margin, right = window.width / 2 - margin
+            var top = -window.height / 2 + margin, bottom = window.height / 2 - margin
+            // Three figures spread evenly over a stretch, centre to centre (`along`), each
+            // taking its own extent: the room left is shared equally round them.
+            var spread = function (list, from, to, extent, place) {
+                var used = 0
+                for (var k = 0; k < 3; k++) used += extent(hours[list[k]])
+                var space = (to - from - used) / 3, at = from + space / 2
+                for (var m = 0; m < 3; m++) {
+                    var hour = hours[list[m]]
+                    place(hour, at + extent(hour) / 2)
+                    at += extent(hour) + space
                 }
             }
-            return placed
+            var wide = function (hour) { return hour.w }
+            var tall = function (hour) { return hour.h }
+            spread([10, 9, 8], top, bottom, tall, function (hour, y) { hour.x = left + hour.w / 2; hour.y = y })
+            spread([2, 3, 4], top, bottom, tall, function (hour, y) { hour.x = right - hour.w / 2; hour.y = y })
+            // The rows run between the columns' figures at their ends.
+            spread([11, 0, 1], left + hours[10].w + gap, right - hours[2].w - gap, wide,
+                   function (hour, x) { hour.x = x; hour.y = top + hour.h / 2 })
+            spread([7, 6, 5], left + hours[8].w + gap, right - hours[4].w - gap, wide,
+                   function (hour, x) { hour.x = x; hour.y = bottom - hour.h / 2 })
+            return hours
         }
         Repeater {
-            model: contour.digits.length
-            Canvas {
-                readonly property var box: contour.digits[index]
-                x: window.width / 2 + box.x
-                y: window.height / 2 + box.y
-                width: box.w
-                height: box.h
-                antialiasing: true
-                onBoxChanged: requestPaint()
-                onPaint: window.digitLines(getContext("2d"), box.digit, width, height, box.weight, contour.ink)
+            model: contour.hours.length
+            Text {
+                readonly property var hour: contour.hours[index]
+                readonly property var font_: contourCuts.itemAt(hour.cut)
+                text: hour.text
+                color: contour.ink
+                font.family: font_ ? font_.family : figures.name
+                font.pixelSize: font_ ? hour.size / font_.inkHeight : hour.size
+                // Centred on its ink: across by its width, down by its figures' ink.
+                x: window.width / 2 + hour.x - contentWidth / 2
+                y: window.height / 2 + hour.y - (baselineOffset - (font_ ? font_.inkRise : 0.72) * font.pixelSize) - hour.h / 2
             }
         }
         Loader {
             sourceComponent: handsComponent
             property real cx: window.width / 2
             property real cy: window.height / 2
-            property real hour: 190
+            property real hour: 180
             property real minute: 270
             property real second: 290
             property bool running: contour.visible
@@ -668,63 +666,9 @@ WebOSWindow {
         }
     }
 
-    // Draws `digit` as rounded strokes of `weight` filling a `width` by `height` box: square
-    // figures with round corners, as Contour's, built from polylines whose corners are rounded
-    // as much as their sides allow, so the figure keeps its weight whatever the box's shape.
-    function digitLines(context, digit, width, height, weight, ink) {
-        context.reset()
-        var p = weight / 2, L = p, T = p, R = width - p, B = height - p, M = height / 2
-        // A 7's corner turns into a diagonal: rounded as much, it would read as a hook.
-        var round = Math.max(0, Math.min(R - L, B - T) * (digit === "7" ? 0.12 : 0.45))
-        var one = Math.min((R - L) / 2, (B - T) * 0.2)
-        var middle = (L + R) / 2
-        var shapes = {
-            "0": [[[L, T], [R, T], [R, B], [L, B]], true],
-            "1": [[[middle - one, T + one * 0.8], [middle, T]], [[middle, T], [middle, B]]],
-            "2": [[[L, T], [R, T], [R, M], [L, M], [L, B], [R, B]]],
-            "3": [[[L, T], [R, T], [R, B], [L, B]], [[L + (R - L) * 0.3, M], [R, M]]],
-            "4": [[[L, T], [L, M], [R, M]], [[R, T], [R, B]]],
-            "5": [[[R, T], [L, T], [L, M], [R, M], [R, B], [L, B]]],
-            "6": [[[R, T], [L, T], [L, B], [R, B], [R, M], [L, M]]],
-            "7": [[[L, T], [R, T], [L + (R - L) * 0.3, B]]],
-            "8": [[[L, T], [R, T], [R, B], [L, B]], true, [[L, M], [R, M]]],
-            "9": [[[R, M], [L, M], [L, T], [R, T], [R, B], [L, B]]]
-        }[digit] || []
-        context.strokeStyle = ink
-        context.lineWidth = weight
-        context.lineCap = "round"
-        context.lineJoin = "round"
-        context.beginPath()
-        for (var i = 0; i < shapes.length; i++) {
-            if (shapes[i] === true) continue
-            var points = shapes[i], closed = shapes[i + 1] === true
-            var corner = function (k) { return points[(k + points.length) % points.length] }
-            var radius = function (k) {
-                var a = corner(k - 1), b = corner(k), c = corner(k + 1)
-                var before = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])
-                var after = Math.abs(c[0] - b[0]) + Math.abs(c[1] - b[1])
-                return Math.max(0, Math.min(round, before / 2, after / 2))
-            }
-            if (closed) {
-                var first = corner(0), second = corner(1)
-                context.moveTo((first[0] + second[0]) / 2, (first[1] + second[1]) / 2)
-                for (var k = 1; k <= points.length; k++)
-                    context.arcTo(corner(k)[0], corner(k)[1], corner(k + 1)[0], corner(k + 1)[1], radius(k))
-                context.closePath()
-            } else {
-                context.moveTo(points[0][0], points[0][1])
-                for (var m = 1; m < points.length - 1; m++)
-                    context.arcTo(points[m][0], points[m][1], points[m + 1][0], points[m + 1][1], radius(m))
-                context.lineTo(points[points.length - 1][0], points[points.length - 1][1])
-            }
-        }
-        context.stroke()
-    }
-
-    // California, as Apple Watch's full-screen California dial with Arabic figures: a triangle
-    // at 12, bars at 3, 6 and 9, the other hours in figures, and a minute track round the
-    // screen's edge; each mark where a hand pointing at it meets the
-    // edge, so the hands read true. Warm ivory on black, the second hand red.
+    // California, after Apple Watch's full-screen California dial: every hour in figures and
+    // a fine minute track round the screen's edge, white on black, the second hand orange; each mark where a hand pointing at it meets the
+    // edge, so the hands read true.
     Item {
         id: california
         visible: window.face === "california"
@@ -732,7 +676,7 @@ WebOSWindow {
         height: window.height
         x: drift.dx
         y: drift.dy
-        readonly property color ivory: "#f1e7d0"
+        readonly property color ink: Qt.rgba(1, 1, 1, 0.94)
         // The minute track, the hours longer, along the screen's edge.
         Repeater {
             model: 60
@@ -750,63 +694,26 @@ WebOSWindow {
                     antialiasing: true
                     x: -width / 2
                     y: 0
-                    color: hour ? california.ivory : Qt.rgba(0.95, 0.91, 0.82, 0.4)
+                    color: hour ? california.ink : Qt.rgba(1, 1, 1, 0.3)
                 }
             }
         }
         Repeater {
-            model: ["1", "2", "bar", "4", "5", "bar", "7", "8", "bar", "10", "11", "triangle"]
-            Item {
+            model: 12
+            Text {
                 readonly property real angle: (index + 1) / 12 * 2 * Math.PI
                 readonly property real distance: window.edge(angle, 770, 372, 10)
-                x: window.width / 2 + distance * Math.sin(angle)
-                y: window.height / 2 - distance * Math.cos(angle)
-                Text {
-                    visible: modelData !== "bar" && modelData !== "triangle"
-                    text: modelData
-                    color: california.ivory
-                    font.family: figures.name
-                    font.pixelSize: 124
-                    font.weight: Font.DemiBold
-                    width: 300
-                    height: 150
-                    x: -width / 2
-                    y: -height / 2
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                // 3, 6 and 9: a bar along the hand that points at it.
-                Rectangle {
-                    visible: modelData === "bar"
-                    width: 104
-                    height: 24
-                    radius: 12
-                    antialiasing: true
-                    x: -width / 2
-                    y: -height / 2
-                    rotation: (index + 1) * 30 - 90
-                    color: california.ivory
-                }
-                // 12: a triangle pointing in.
-                Canvas {
-                    visible: modelData === "triangle"
-                    width: 104
-                    height: 92
-                    x: -width / 2
-                    y: -height / 2
-                    antialiasing: true
-                    onPaint: {
-                        var context = getContext("2d")
-                        context.reset()
-                        context.fillStyle = california.ivory
-                        context.beginPath()
-                        context.moveTo(0, 0)
-                        context.lineTo(width, 0)
-                        context.lineTo(width / 2, height)
-                        context.closePath()
-                        context.fill()
-                    }
-                }
+                text: index + 1
+                color: california.ink
+                font.family: figures.name
+                font.pixelSize: 112
+                font.weight: Font.DemiBold
+                width: 300
+                height: 150
+                x: window.width / 2 + distance * Math.sin(angle) - width / 2
+                y: window.height / 2 - distance * Math.cos(angle) - height / 2
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
         Loader {
@@ -816,9 +723,8 @@ WebOSWindow {
             property real hour: 200
             property real minute: 300
             property real second: 340
-            property color ink: california.ivory
+            property color ink: "white"
             property bool running: california.visible
-            property color accent: "#ff3b30"
         }
     }
 
