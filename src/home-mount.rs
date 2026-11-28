@@ -959,6 +959,12 @@ impl<S: System> Home<S> {
             }
             return Err(error);
         }
+        // An updated Lounge brings an updated screen saver: rewritten and bound again now, not
+        // at the next power cycle (only boot and enabling did it, so an update kept the old
+        // saver until a restart).
+        if let Err(error) = self.set_saver(Some(app_dir)) {
+            self.system.log(&format!("screen saver: {error}"));
+        }
         Ok(())
     }
 
