@@ -436,6 +436,15 @@ pub struct State {
     pub shelf_was_visible: bool,
     /// The dock app the open shelf belongs to.
     pub shelf_owner: Option<String>,
+    /// The local time, set once a minute by the frame loop (`State::set_local_now`): what the
+    /// shelf's order and its NEW badges are reckoned against. None until the TV's clock is set.
+    pub local_now: Option<time::OffsetDateTime>,
+    /// The shelf's pins, keys in the order shown (`pins::rank_pins`); a pin not in it follows,
+    /// in its own order.
+    pub shelf_order: Vec<String>,
+    /// The order is to be worked out again, once the shelf is out of sight (a row never
+    /// reshuffles under someone's eyes).
+    pub shelf_order_due: bool,
     /// The arrow being handled is a held key's repeat: it stops at edges.
     pub held: bool,
     /// When Top Shelf mode last began; its chevron bobs for a moment.
@@ -478,11 +487,14 @@ pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// The appearance choices, in Settings' order (as tvOS lists them).
 pub const APPEARANCES: [Appearance; 3] = [Appearance::Light, Appearance::Dark, Appearance::Auto];
-pub const SAVER_FACES: [crate::model::SaverFace; 4] = [
+pub const SAVER_FACES: [crate::model::SaverFace; 7] = [
     crate::model::SaverFace::Analog,
+    crate::model::SaverFace::Contour,
+    crate::model::SaverFace::California,
+    crate::model::SaverFace::Numerals,
     crate::model::SaverFace::Digital,
     crate::model::SaverFace::Modular,
-    crate::model::SaverFace::Numerals,
+    crate::model::SaverFace::Shuffle,
 ];
 pub const CLOCK_STYLES: [crate::model::ClockStyle; 3] = [
     crate::model::ClockStyle::Digital,
@@ -615,6 +627,9 @@ impl State {
             shelf_changed: None,
             shelf_was_visible: false,
             shelf_owner: None,
+            local_now: None,
+            shelf_order: Vec::new(),
+            shelf_order_due: true,
             held: false,
             shelf_since: Some(crate::clock::now()),
             shelf_app: None,

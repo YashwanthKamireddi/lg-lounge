@@ -2424,7 +2424,7 @@ fn the_screen_saver_face_is_chosen_in_settings_and_written_for_the_saver() {
     state.focus = Target::Setting(15);
     state.activate();
     assert_eq!(state.focus, Target::Choice(0));
-    state.focus = Target::Choice(2);
+    state.focus = Target::Choice(5);
     state.activate();
     assert_eq!(state.preferences.saver, crate::model::SaverFace::Modular);
     let written = read(&state);
@@ -2503,6 +2503,8 @@ fn a_pin_in_settings_moves_to_the_front_or_is_removed_cancel_focused() {
     use crate::model::{Pin, PinKind};
     use crate::state::{Overlay, Subpage};
     let mut state = ready();
+    // Move to Front belongs to the pins' own order (ordered by habit it would change nothing).
+    state.preferences.personal_order = false;
     for (id, title) in [
         ("UCJi8M0hRKjz8SLPvJKEVTOg", "ETV Andhra Pradesh"),
         ("UCSzOZ97LOpU-_AVlGfmD4rQ", "Bhakthi TV"),

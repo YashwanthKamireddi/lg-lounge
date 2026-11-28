@@ -194,7 +194,7 @@ impl State {
                     Some(Subpage::Clock | Subpage::Temperature) => 2,
                     Some(Subpage::BigClock) => CLOCK_STYLES.len(),
                     Some(Subpage::Saver) => SAVER_FACES.len(),
-                    Some(Subpage::Pins) => self.preferences.pins.len() + 1,
+                    Some(Subpage::Pins) => self.preferences.pins.len() + 2,
                     Some(Subpage::Appearance) => APPEARANCES.len(),
                     Some(Subpage::Hidden) => self.hidden_count().max(1),
                     // The pictures, then "From your phone".

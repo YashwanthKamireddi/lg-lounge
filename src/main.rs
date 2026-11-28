@@ -824,6 +824,7 @@ impl Shell {
         if self.last_minute != Some(now.unix_timestamp() / 60) {
             self.last_minute = Some(now.unix_timestamp() / 60);
             self.state.hour = now.hour();
+            self.state.set_local_now(now);
             self.state.dirty = true;
         }
         // The analog face's second hand sweeps while it shows: a frame at every refresh.

@@ -70,7 +70,8 @@ that webOS itself reads, and every part is removed again when Lounge as Home is 
   opens Home over it, as LG's Home does when "Home Auto Launch" is on.
 - **Screen saver.** webOS draws its screen saver from a QML file in
   `com.webos.app.screensaver`. While Lounge is Home, its own faces (`tv/screensaver.qml`: Analog,
-  Digital, Modular, Numerals, chosen in Settings) are bound over that file. Qt's render thread
+  Contour, California, Numerals, Digital and Modular, after Apple Watch's and laid out for a 16:9
+  screen, or Shuffle for another each time, chosen in Settings) are bound over that file. Qt's render thread
   sweeps the second hand, the digital faces tick on the wall clock's second, and the face steps a
   pixel or two once a minute so no pixel holds the image. Weather older than an hour is left
   out. A saver another integration mounted is left alone.
@@ -92,7 +93,13 @@ once through the YouTube app's own `contentTarget` launch parameter.
   using the remote, never behind an app or overnight under the screen saver, and keeps the thumbnails on the TV, dropping those no pin shows any more.
 - **Pinning.** A link pasted on the phone (the same QR page as photos), on its own or inside
   shared text, is resolved on the TV: a handle to its channel, a video to its title. Pins are
-  moved to the front or removed in Settings.
+  removed in Settings, or moved to the front with the order below off.
+- **Learns the family's day.** Each video opened from the shelf is remembered on the TV (pin,
+  video, time of day; the newest 300). The shelf then leads with what is usually opened around
+  this hour, recent weeks counting most: the news channel in the evening, cartoons after
+  school. It reorders only while out of sight, never under someone's eyes. An upload from the
+  last day and a half that nobody has opened reads NEW. Off in Settings, the pins keep their
+  own order.
 
 ## Text in every script
 

@@ -187,17 +187,25 @@ pub(super) fn shelf(out: &mut Scene, state: &State, assets: &Assets, now: Offset
                 [1., 1., 1., 1.],
             ));
         }
-        if live {
+        // LIVE in red; a fresh upload nobody has opened yet, NEW in white, as tvOS marks a new
+        // episode.
+        let badge = if live {
+            Some(("LIVE", c(0xe5241b, 1.), c(0xffffff, 1.)))
+        } else if shelf_card.new {
+            Some((i18n::t("newBadge"), c(0xffffff, 0.94), c(0x1c1c1e, 1.)))
+        } else {
+            None
+        };
+        if let Some((word, fill, ink)) = badge {
             let style = text(20. * scale, 650, 0.06);
-            let word = "LIVE";
             let width = assets.width(word, style) + 24. * scale;
             let badge = Rect::new(rect.x + pad, rect.y + pad, width, 32. * scale);
-            out.shape(badge, badge.h / 2., c(0xe5241b, 1.));
+            out.shape(badge, badge.h / 2., fill);
             out.text(
                 word,
                 Rect::new(badge.x, badge.y + 3. * scale, badge.w, badge.h),
                 style,
-                c(0xffffff, 1.),
+                ink,
                 true,
             );
         }

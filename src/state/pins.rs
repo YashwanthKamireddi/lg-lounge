@@ -43,6 +43,52 @@ pub struct ShelfCard<'a> {
     pub avatar: Option<&'a str>,
     /// On air as far as a recent answer says (`LIVE_HOLDS`).
     pub live: bool,
+    /// Uploaded in the last `NEW_FOR` and not opened from the shelf yet.
+    pub new: bool,
+}
+
+/// How long an upload nobody has opened reads NEW.
+const NEW_FOR: i64 = 36 * 3600;
+/// A habit fades by half every this many days: what the family watches now outweighs what it
+/// watched last season.
+const HALF_LIFE_DAYS: f64 = 21.;
+/// How far from the hour it was watched at a habit still counts (minutes, one deviation).
+const HABIT_SPREAD: f64 = 75.;
+
+/// The pins' keys, what is usually opened around `minute` (local minute of the day) first: each
+/// open counts by how near its time of day was (a bell over the day, wrapping at midnight) and
+/// how recent it was, plus a little for any time of day. Pins never opened keep their own order
+/// after those that were, so a new family sees the shelf just as pinned.
+pub fn rank_pins(
+    pins: &[crate::model::Pin],
+    watched: &[crate::model::Watch],
+    now: i64,
+    minute: u16,
+) -> Vec<String> {
+    let score = |key: &str| -> f64 {
+        watched
+            .iter()
+            .filter(|watch| watch.pin == key)
+            .map(|watch| {
+                let days = (now - watch.at).max(0) as f64 / 86_400.;
+                let recent = 0.5_f64.powf(days / HALF_LIFE_DAYS);
+                let apart = (i32::from(watch.minute) - i32::from(minute)).rem_euclid(1440);
+                let apart = f64::from(apart.min(1440 - apart)) / HABIT_SPREAD;
+                recent * (0.15 + (-apart * apart / 2.).exp())
+            })
+            .sum()
+    };
+    let mut ranked: Vec<(String, f64)> = pins
+        .iter()
+        .map(|pin| {
+            let key = pin.key();
+            let score = score(&key);
+            (key, score)
+        })
+        .collect();
+    // Stable: equal scores (none, mostly) keep the pins' order.
+    ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+    ranked.into_iter().map(|(key, _)| key).collect()
 }
 
 impl State {
@@ -72,21 +118,89 @@ impl State {
         let Some(app) = self.shelf_app() else {
             return vec![];
         };
-        self.preferences
+        let mut pins: Vec<&crate::model::Pin> = self
+            .preferences
             .pins
             .iter()
             .filter(|pin| pin.app() == app)
+            .collect();
+        if self.preferences.personal_order {
+            let place = |pin: &crate::model::Pin| {
+                let key = pin.key();
+                self.shelf_order
+                    .iter()
+                    .position(|ranked| *ranked == key)
+                    .unwrap_or(usize::MAX)
+            };
+            pins.sort_by_key(|pin| place(pin));
+        }
+        let now = self.local_now.map(time::OffsetDateTime::unix_timestamp);
+        pins.into_iter()
             .filter_map(|pin| {
                 let row = self.shelf.get(&pin.key())?;
                 let card = row.cards.first()?;
+                let live = card.live && crate::clock::since(row.fetched) < LIVE_HOLDS;
+                let fresh = now
+                    .zip(
+                        time::OffsetDateTime::parse(
+                            &card.published,
+                            &time::format_description::well_known::Rfc3339,
+                        )
+                        .ok(),
+                    )
+                    .is_some_and(|(now, at)| (0..NEW_FOR).contains(&(now - at.unix_timestamp())));
+                let opened = self
+                    .preferences
+                    .watched
+                    .iter()
+                    .any(|watch| watch.video == card.video);
                 Some(ShelfCard {
                     pin,
                     card,
                     avatar: row.avatar.as_deref(),
-                    live: card.live && crate::clock::since(row.fetched) < LIVE_HOLDS,
+                    live,
+                    new: !live && fresh && !opened,
                 })
             })
             .collect()
+    }
+
+    /// The local time, once a minute (and at once when the clock or the time zone changes). The
+    /// shelf is ordered again for the new time of day, the next time it is out of sight.
+    pub fn set_local_now(&mut self, now: time::OffsetDateTime) {
+        // Before the network sets it, a TV's clock reads 1970: no habit is reckoned from that.
+        if now.year() < 2024 {
+            return;
+        }
+        let hour_turned = self.local_now.is_none_or(|was| was.hour() != now.hour());
+        self.local_now = Some(now);
+        if hour_turned {
+            self.shelf_order_due = true;
+        }
+    }
+
+    /// Orders the shelf again when due, while nobody is looking at it (or before it has ever
+    /// been ordered).
+    fn order_shelf(&mut self) {
+        if !self.shelf_order_due || !self.preferences.personal_order {
+            return;
+        }
+        let ordered_before = !self.shelf_order.is_empty();
+        if ordered_before && (self.shelf_open || self.shelf_visible()) {
+            return;
+        }
+        let Some(now) = self.local_now else {
+            return;
+        };
+        let minute = u16::from(now.hour()) * 60 + u16::from(now.minute());
+        self.shelf_order = rank_pins(
+            &self.preferences.pins,
+            &self.preferences.watched,
+            now.unix_timestamp(),
+            minute,
+        );
+        self.shelf_order_due = false;
+        self.dirty = true;
     }
 
     /// The shelf shows whenever a dock app with pins is focused, as Apple TV's Top Shelf shows
@@ -101,6 +215,7 @@ impl State {
 
     /// Notes the shelf appearing or leaving, for the crossfade with the clock (once a frame).
     pub(super) fn track_shelf(&mut self) {
+        self.order_shelf();
         // The dock app a shelf shows for is remembered, so a pointer moving onto a card (focus
         // then on the card, not the app) keeps the shelf it saw.
         if !self.preferences.pins.is_empty()
@@ -232,13 +347,29 @@ impl State {
         }
     }
 
-    /// What OK on a shelf card opens: its video, in the pin's app.
-    pub(super) fn open_card(&self, index: usize) -> Vec<Effect> {
+    /// What OK on a shelf card opens: its video, in the pin's app. The open is remembered, for
+    /// the shelf's order (`rank_pins`) and its NEW badges.
+    pub(super) fn open_card(&mut self, index: usize) -> Vec<Effect> {
         let Some(card) = self.shelf_cards().get(index).cloned() else {
             return vec![];
         };
         let params = crate::youtube::launch_params(&card.card.video);
-        vec![Effect::Open(card.pin.app().into(), params)]
+        let open = Effect::Open(card.pin.app().into(), params);
+        let Some(now) = self.local_now else {
+            return vec![open];
+        };
+        let watch = crate::model::Watch {
+            pin: card.pin.key(),
+            video: card.card.video.clone(),
+            at: now.unix_timestamp(),
+            minute: u16::from(now.hour()) * 60 + u16::from(now.minute()),
+        };
+        let watched = &mut self.preferences.watched;
+        watched.push(watch);
+        let over = watched.len().saturating_sub(crate::model::MAX_WATCHES);
+        watched.drain(..over);
+        self.shelf_order_due = true;
+        vec![open, Effect::Save]
     }
 
     /// The remote or the pointer was used.
@@ -257,7 +388,9 @@ impl State {
             .pins
             .first()
             .is_some_and(|pin| &pin.key() == key);
-        if first {
+        // Ordered for the family, the shelf does not follow the pins' order: Move to Front
+        // would change nothing anyone sees.
+        if first || self.preferences.personal_order {
             &[UnpinChoice::Remove, UnpinChoice::Cancel]
         } else {
             &[UnpinChoice::Front, UnpinChoice::Remove, UnpinChoice::Cancel]
@@ -276,7 +409,66 @@ impl State {
             return vec![];
         }
         self.shelf.remove(key);
+        self.preferences.watched.retain(|watch| watch.pin != key);
         self.dirty = true;
         vec![Effect::Save]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rank_pins;
+    use crate::model::{Pin, PinKind, Watch};
+
+    fn pin(id: &str) -> Pin {
+        Pin {
+            kind: PinKind::Channel,
+            id: id.into(),
+            title: id.into(),
+            avatar: None,
+        }
+    }
+    fn watch(id: &str, days_ago: i64, minute: u16) -> Watch {
+        Watch {
+            pin: format!("channel:{id}"),
+            video: "v".into(),
+            at: 100 * 86_400 - days_ago * 86_400,
+            minute,
+        }
+    }
+
+    #[test]
+    fn the_shelf_leads_with_what_is_watched_at_this_hour() {
+        let pins = [
+            pin("news"),
+            pin("cartoons"),
+            pin("devotional"),
+            pin("unwatched"),
+        ];
+        // News most evenings at 21:00, cartoons after school at 16:30, devotional at 6:30.
+        let mut watched = vec![];
+        for day in 0..10 {
+            watched.push(watch("news", day, 21 * 60));
+            watched.push(watch("cartoons", day, 16 * 60 + 30));
+            watched.push(watch("devotional", day, 6 * 60 + 30));
+        }
+        let at = |minute| rank_pins(&pins, &watched, 100 * 86_400, minute);
+        assert_eq!(at(21 * 60 + 15)[0], "channel:news");
+        assert_eq!(at(16 * 60)[0], "channel:cartoons");
+        // Wrapping at midnight: 23:50 is nearer 21:00 than 6:30 is.
+        assert_eq!(at(23 * 60 + 50)[0], "channel:news");
+        assert_eq!(at(6 * 60)[0], "channel:devotional");
+        // Never opened: last, in its own order.
+        assert_eq!(at(12 * 60)[3], "channel:unwatched");
+        // Nothing watched yet: exactly as pinned.
+        assert_eq!(
+            rank_pins(&pins, &[], 0, 0),
+            [
+                "channel:news",
+                "channel:cartoons",
+                "channel:devotional",
+                "channel:unwatched"
+            ]
+        );
     }
 }

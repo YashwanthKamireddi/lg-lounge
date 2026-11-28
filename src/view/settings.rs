@@ -434,6 +434,9 @@ fn saver_label(face: crate::model::SaverFace) -> (&'static str, &'static str) {
         crate::model::SaverFace::Digital => ("saverDigital", "saverDigitalDetail"),
         crate::model::SaverFace::Modular => ("saverModular", "saverModularDetail"),
         crate::model::SaverFace::Numerals => ("saverNumerals", "saverNumeralsDetail"),
+        crate::model::SaverFace::Contour => ("saverContour", "saverContourDetail"),
+        crate::model::SaverFace::California => ("saverCalifornia", "saverCaliforniaDetail"),
+        crate::model::SaverFace::Shuffle => ("saverShuffle", "saverShuffleDetail"),
     }
 }
 
@@ -921,11 +924,14 @@ fn settings_list(out: &mut Scene, state: &State, assets: &Assets) {
                     };
                     (pin.title.as_str(), Some(kind), false)
                 })
-                .chain(std::iter::once((
-                    i18n::t("pinsAdd"),
-                    Some(i18n::t("pinsAddDetail")),
-                    false,
-                )))
+                .chain([
+                    (i18n::t("pinsAdd"), Some(i18n::t("pinsAddDetail")), false),
+                    (
+                        i18n::t("pinsForYou"),
+                        Some(i18n::t("pinsForYouDetail")),
+                        state.preferences.personal_order,
+                    ),
+                ])
                 .collect(),
             Subpage::Saver => crate::state::SAVER_FACES
                 .iter()

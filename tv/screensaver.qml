@@ -1,5 +1,5 @@
 /* Lounge's screen saver: a clock face, full screen on black, chosen in Lounge's Settings (Analog,
- * Digital, Modular, Numerals). Lounge writes the choice, the clock format and the weather to
+ * Digital, Modular, Numerals, Contour, California, or Shuffle: another each time). Lounge writes the choice, the clock format and the weather to
  * saver.json beside this file's copy; the saver reads it as it starts. webOS draws its screen saver
  * from com.webos.app.screensaver's qml/main.qml; with Lounge as Home `src/home-mount.rs` binds
  * this file over it (its copy in /var/lib/lounge, with `assets` pointing at Lounge's fonts), and
@@ -30,6 +30,10 @@ WebOSWindow {
     property string settingsUrl: "file:///var/lib/lounge/saver.json"
     property var settings: ({ face: "analog", hour24: false, weather: "", weather_until: 0 })
     property date now: new Date()
+    // The face on screen: the one chosen, or with Shuffle one of them, drawn as the saver starts.
+    readonly property var faces: ["analog", "digital", "modular", "numerals", "contour", "california"]
+    property string face: "analog"
+    readonly property color orange: "#ff9f0a"
 
     function load() {
         var request = new XMLHttpRequest()
@@ -37,7 +41,12 @@ WebOSWindow {
             if (request.readyState !== XMLHttpRequest.DONE) return
             try {
                 var read = JSON.parse(request.responseText)
-                if (read && typeof read.face === "string") settings = read
+                if (read && typeof read.face === "string") {
+                    settings = read
+                    face = read.face === "shuffle"
+                        ? faces[Math.floor(Math.random() * faces.length)]
+                        : read.face
+                }
             } catch (error) {}
         }
         request.open("GET", settingsUrl)
@@ -94,6 +103,18 @@ WebOSWindow {
         id: figures
         source: window.assets + "font-display-600.ttf"
     }
+    // Contour's figures: six cuts from narrow and light to wide and heavy (tools/font-weights.py).
+    Repeater {
+        id: contourCuts
+        model: 6
+        Item {
+            readonly property string family: cut.name
+            FontLoader {
+                id: cut
+                source: window.assets + "font-contour-" + index + ".ttf"
+            }
+        }
+    }
     // The clock's own tall, narrow figures.
     FontLoader {
         id: tall
@@ -102,7 +123,7 @@ WebOSWindow {
 
     Item {
         id: clock
-        visible: settings.face === "analog"
+        visible: window.face === "analog"
         // Its second hand sweeps only while it is the face on screen.
         onVisibleChanged: visible ? sweep.sync() : sweep.stop()
         // Home's face, larger: a squircle in proportion to the one over the wallpaper.
@@ -297,7 +318,7 @@ WebOSWindow {
         // Each minute the sweep starts again from the wall clock, so it never drifts from it.
         Timer {
             interval: 60000
-            running: true
+            property bool running: true
             repeat: true
             onTriggered: sweep.sync()
         }
@@ -315,7 +336,7 @@ WebOSWindow {
 
     // Digital: the Lock Screen's tall figures, the day and date above them.
     Column {
-        visible: settings.face === "digital"
+        visible: window.face === "digital"
         spacing: -20
         x: (window.width - width) / 2 + drift.dx
         // The figures' line box keeps room below for descenders, which digits never use:
@@ -342,7 +363,7 @@ WebOSWindow {
     // Modular: the time large and left aligned over two plain panels, the date and the weather,
     // as Apple Watch's Modular face lays out its complications.
     Item {
-        visible: settings.face === "modular"
+        visible: window.face === "modular"
         width: 1300
         height: childrenRect.height
         x: (window.width - width) / 2 + drift.dx
@@ -405,101 +426,331 @@ WebOSWindow {
         }
     }
 
-    // Numerals: only the quarters, very large, around fine hands, the date under the centre;
-    // in the spirit of Apple Watch's Typograph, set in the clock's tall figures.
+    // The hour, minute and sweeping second hands every hand-drawn face shares, about (cx, cy):
+    // a slim stem out of the centre, then a broad rounded blade, each over a soft shade of
+    // itself; the second hand sweeps on Qt's render thread, set again from the wall clock each
+    // minute so it never drifts. `hour` and `minute` are the blades' lengths.
+    // (A Component under a Loader, its settings the Loader's properties: the saver is one file
+    // bound over webOS's, so a Hands.qml beside it would not be found.)
+    Component {
+        id: handsComponent
+        Item {
+            id: set
+            readonly property Item spec: parent
+            readonly property color accent: spec && spec.accent !== undefined ? spec.accent : window.orange
+            readonly property real minutes: window.now.getMinutes() + window.now.getSeconds() / 60
+            readonly property real hourAngle: ((window.now.getHours() % 12) + minutes / 60) * 30
+            readonly property real minuteAngle: minutes * 6
+            Repeater {
+                model: [
+                    { hand: "hour", blade: 20, shade: true }, { hand: "minute", blade: 14, shade: true },
+                    { hand: "hour", blade: 20, shade: false }, { hand: "minute", blade: 14, shade: false }
+                ]
+                Item {
+                    readonly property real length: set.spec ? set.spec[modelData.hand] : 0
+                    readonly property color ink: modelData.shade ? Qt.rgba(0, 0, 0, 0.55)
+                        : (set.spec ? set.spec.ink : "white")
+                    x: set.spec ? set.spec.cx : 0
+                    y: (set.spec ? set.spec.cy : 0) + (modelData.shade ? 8 : 0)
+                    rotation: modelData.hand === "hour" ? set.hourAngle : set.minuteAngle
+                    Rectangle {
+                        width: 8; height: 52; radius: 4; antialiasing: true
+                        x: -4; y: -48
+                        color: parent.ink
+                    }
+                    Rectangle {
+                        width: modelData.blade; height: parent.length - 44
+                        radius: modelData.blade / 2; antialiasing: true
+                        x: -modelData.blade / 2; y: -parent.length
+                        color: parent.ink
+                    }
+                }
+            }
+            Rectangle {
+                width: 28; height: 28; radius: 14; antialiasing: true
+                color: set.spec ? set.spec.ink : "white"
+                x: (set.spec ? set.spec.cx : 0) - 14; y: (set.spec ? set.spec.cy : 0) - 14
+            }
+            Item {
+                id: secondHand
+                x: set.spec ? set.spec.cx : 0
+                y: set.spec ? set.spec.cy : 0
+                Rectangle {
+                    width: 4; radius: 2; antialiasing: true
+                    height: (set.spec ? set.spec.second : 0) * 1.18
+                    x: -2
+                    y: -(set.spec ? set.spec.second : 0)
+                    color: set.accent
+                }
+                Rectangle {
+                    width: 16; height: 16; radius: 8; antialiasing: true
+                    color: set.accent
+                    x: -8; y: -8
+                }
+                Rectangle {
+                    width: 6; height: 6; radius: 3; antialiasing: true
+                    color: "#1c1c1e"
+                    x: -3; y: -3
+                }
+            }
+            RotationAnimator {
+                id: sweepHand
+                target: secondHand
+                duration: 60000
+                loops: Animation.Infinite
+                function sync() {
+                    var at = new Date()
+                    var angle = (at.getSeconds() + at.getMilliseconds() / 1000) * 6
+                    stop()
+                    from = angle
+                    to = angle + 360
+                    start()
+                }
+            }
+            readonly property bool running: set.spec ? set.spec.running : false
+            onRunningChanged: running ? sweepHand.sync() : sweepHand.stop()
+            Component.onCompleted: if (running) sweepHand.sync()
+            Timer {
+                interval: 60000
+                running: set.running
+                repeat: true
+                onTriggered: sweepHand.sync()
+            }
+        }
+    }
+
+    // Numerals: every hour in the clock's tall figures, round fine hands, as Apple Watch's
+    // Typograph sets them; the date under the centre.
     Item {
         id: numerals
-        visible: settings.face === "numerals"
-        width: 980
-        height: 980
-        x: (window.width - width) / 2 + drift.dx
-        y: (window.height - height) / 2 + drift.dy
-        readonly property real centre: width / 2
+        visible: window.face === "numerals"
+        width: window.width
+        height: window.height
+        x: drift.dx
+        y: drift.dy
         Repeater {
-            model: [
-                { n: "12", x: 0, y: -1 }, { n: "3", x: 1, y: 0 },
-                { n: "6", x: 0, y: 1 }, { n: "9", x: -1, y: 0 }
-            ]
+            model: 12
             Text {
-                text: modelData.n
-                color: Qt.rgba(1, 1, 1, 0.92)
+                readonly property real angle: (index + 1) / 12 * 2 * Math.PI
+                text: index + 1
+                color: Qt.rgba(1, 1, 1, 0.94)
                 font.family: tall.name
-                font.pixelSize: 250
-                width: 320
-                height: 260
+                font.pixelSize: 176
+                width: 260
+                height: 190
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                x: numerals.centre + modelData.x * 380 - width / 2
-                y: numerals.centre + modelData.y * 360 - height / 2
+                x: window.width / 2 + 392 * Math.sin(angle) - width / 2
+                y: window.height / 2 - 392 * Math.cos(angle) - height / 2
             }
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: numerals.centre + 150
+            y: window.height / 2 + 120
             text: weekday(window.now).substring(0, 3).toUpperCase() + " " + window.now.getDate()
-            color: "#ff9f0a"
+            color: window.orange
             font.family: figures.name
-            font.pixelSize: 44
+            font.pixelSize: 40
             font.weight: Font.DemiBold
             font.letterSpacing: 4
         }
+        Loader {
+            sourceComponent: handsComponent
+            property real cx: window.width / 2
+            property real cy: window.height / 2
+            property real hour: 200
+            property real minute: 300
+            property real second: 330
+            property bool running: numerals.visible
+            property color ink: "white"
+        }
+    }
+
+    // Contour, after Apple Watch's, made for a TV: the twelve hours evenly round the screen's
+    // edge, upright so they read from the sofa. As the watch's figures swell toward the hour,
+    // the hour the hour hand is at is set in the widest, heaviest cut, largest and brightest,
+    // its neighbours a cut narrower, and the far side of the dial narrow, light and quiet: the
+    // time reads at a glance across the room, and the swell moves on with the hand.
+    Item {
+        id: contour
+        visible: window.face === "contour"
+        width: window.width
+        height: window.height
+        x: drift.dx
+        y: drift.dy
+        // The line the hours sit on: a rounded rectangle, half sizes `a` by `b`.
+        readonly property real a: 800
+        readonly property real b: 410
+        readonly property real hand: ((window.now.getHours() % 12) * 60 + window.now.getMinutes()) / 60
+        // The twelve places, evenly along the line's length from 12 at the top centre (where
+        // hands pointing at them would meet it, 11, 12 and 1 crowded the top of a wide screen
+        // and its sides stood empty); 12, 3, 6 and 9 still sit square on the hands.
+        readonly property var spots: {
+            var steps = 1440, points = [], lengths = [0]
+            for (var i = 0; i <= steps; i++) {
+                var angle = i / steps * 2 * Math.PI
+                var distance = window.edge(angle, a, b, 6)
+                points.push({ x: distance * Math.sin(angle), y: -distance * Math.cos(angle) })
+                if (i > 0) {
+                    var dx = points[i].x - points[i - 1].x, dy = points[i].y - points[i - 1].y
+                    lengths.push(lengths[i - 1] + Math.sqrt(dx * dx + dy * dy))
+                }
+            }
+            var spots = [], at = 0
+            for (var hour = 1; hour <= 12; hour++) {
+                var wanted = hour / 12 * lengths[steps]
+                while (at < steps && lengths[at] < wanted) at++
+                spots.push(points[at])
+            }
+            return spots
+        }
         Repeater {
-            model: [
-                { length: 230, width: 14, minute: false },
-                { length: 340, width: 9, minute: true }
-            ]
+            model: 12
+            Text {
+                // How near the hour hand this hour is: 1 at it, falling away over two hours.
+                readonly property real near: {
+                    var apart = Math.abs((index + 1) % 12 - contour.hand)
+                    apart = Math.min(apart, 12 - apart)
+                    return Math.exp(-apart * apart / 1.4)
+                }
+                // The cut for how near: the hand's hour the widest.
+                readonly property int cut: Math.round(near * 5)
+                text: index + 1
+                color: "white"
+                opacity: 0.3 + 0.7 * near
+                font.family: contourCuts.count === 6 && contourCuts.itemAt(cut)
+                    ? contourCuts.itemAt(cut).family : figures.name
+                font.pixelSize: 150
+                width: 420
+                height: 180
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                x: window.width / 2 + contour.spots[index].x - width / 2
+                y: window.height / 2 + contour.spots[index].y - height / 2
+                scale: 0.7 + 0.3 * near
+                Behavior on scale { NumberAnimation { duration: 900; easing.type: Easing.InOutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.InOutCubic } }
+            }
+        }
+        Loader {
+            sourceComponent: handsComponent
+            property real cx: window.width / 2
+            property real cy: window.height / 2
+            property real hour: 210
+            property real minute: 300
+            property real second: 320
+            property bool running: contour.visible
+            property color ink: "white"
+        }
+    }
+
+    // California, as Apple Watch's full-screen California dial with Arabic figures: a triangle
+    // at 12, bars at 3, 6 and 9, the other hours in figures, and a minute track round the
+    // screen's edge; each mark where a hand pointing at it meets the
+    // edge, so the hands read true. Warm ivory on black, the second hand red.
+    Item {
+        id: california
+        visible: window.face === "california"
+        width: window.width
+        height: window.height
+        x: drift.dx
+        y: drift.dy
+        readonly property color ivory: "#f1e7d0"
+        // The minute track, the hours longer, along the screen's edge.
+        Repeater {
+            model: 60
             Item {
-                x: numerals.centre
-                y: numerals.centre
-                rotation: modelData.minute
-                    ? (window.now.getMinutes() + window.now.getSeconds() / 60) * 6
-                    : ((window.now.getHours() % 12) + window.now.getMinutes() / 60) * 30
+                readonly property bool hour: index % 5 === 0
+                readonly property real angle: index / 60 * 2 * Math.PI
+                readonly property real distance: window.edge(angle, 900, 482, 10)
+                x: window.width / 2 + distance * Math.sin(angle)
+                y: window.height / 2 - distance * Math.cos(angle)
+                rotation: index * 6
                 Rectangle {
-                    width: modelData.width
-                    height: modelData.length
-                    radius: modelData.width / 2
+                    width: hour ? 6 : 3
+                    height: hour ? 30 : 16
+                    radius: width / 2
                     antialiasing: true
-                    x: -modelData.width / 2
-                    y: -modelData.length + modelData.width
-                    color: "white"
+                    x: -width / 2
+                    y: 0
+                    color: hour ? california.ivory : Qt.rgba(0.95, 0.91, 0.82, 0.4)
                 }
             }
         }
-        Item {
-            id: numeralsSecond
-            x: numerals.centre
-            y: numerals.centre
-            Rectangle {
-                width: 4; radius: 2; antialiasing: true
-                height: 420
-                x: -2
-                y: -370
-                color: "#ff9f0a"
+        Repeater {
+            model: ["1", "2", "bar", "4", "5", "bar", "7", "8", "bar", "10", "11", "triangle"]
+            Item {
+                readonly property real angle: (index + 1) / 12 * 2 * Math.PI
+                readonly property real distance: window.edge(angle, 770, 372, 10)
+                x: window.width / 2 + distance * Math.sin(angle)
+                y: window.height / 2 - distance * Math.cos(angle)
+                Text {
+                    visible: modelData !== "bar" && modelData !== "triangle"
+                    text: modelData
+                    color: california.ivory
+                    font.family: figures.name
+                    font.pixelSize: 124
+                    font.weight: Font.DemiBold
+                    width: 300
+                    height: 150
+                    x: -width / 2
+                    y: -height / 2
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                // 3, 6 and 9: a bar along the hand that points at it.
+                Rectangle {
+                    visible: modelData === "bar"
+                    width: 104
+                    height: 24
+                    radius: 12
+                    antialiasing: true
+                    x: -width / 2
+                    y: -height / 2
+                    rotation: (index + 1) * 30 - 90
+                    color: california.ivory
+                }
+                // 12: a triangle pointing in.
+                Canvas {
+                    visible: modelData === "triangle"
+                    width: 104
+                    height: 92
+                    x: -width / 2
+                    y: -height / 2
+                    antialiasing: true
+                    onPaint: {
+                        var context = getContext("2d")
+                        context.reset()
+                        context.fillStyle = california.ivory
+                        context.beginPath()
+                        context.moveTo(0, 0)
+                        context.lineTo(width, 0)
+                        context.lineTo(width / 2, height)
+                        context.closePath()
+                        context.fill()
+                    }
+                }
             }
         }
-        RotationAnimator {
-            id: numeralsSweep
-            target: numeralsSecond
-            duration: 60000
-            loops: Animation.Infinite
-            running: numerals.visible
-            from: 0
-            to: 360
-            function sync() {
-                var at = new Date()
-                var angle = (at.getSeconds() + at.getMilliseconds() / 1000) * 6
-                stop()
-                from = angle
-                to = angle + 360
-                start()
-            }
+        Loader {
+            sourceComponent: handsComponent
+            property real cx: window.width / 2
+            property real cy: window.height / 2
+            property real hour: 200
+            property real minute: 300
+            property real second: 340
+            property color ink: california.ivory
+            property bool running: california.visible
+            property color accent: "#ff3b30"
         }
-        onVisibleChanged: if (visible) numeralsSweep.sync()
-        Rectangle {
-            width: 22; height: 22; radius: 11; antialiasing: true
-            color: "#ff9f0a"
-            x: numerals.centre - 11; y: numerals.centre - 11
-        }
+    }
+
+    // How far from the centre a rounded rectangle of half sizes `a` by `b` lies along `angle`
+    // (radians clockwise from 12): a superellipse of power `power`, its corners as round as a
+    // TV's picture's.
+    function edge(angle, a, b, power) {
+        var x = Math.abs(Math.sin(angle)) / a, y = Math.abs(Math.cos(angle)) / b
+        return Math.pow(Math.pow(x, power) + Math.pow(y, power), -1 / power)
     }
 
     // A drift of a few pixels about the exact centre: the face reads as centred, as a watch face

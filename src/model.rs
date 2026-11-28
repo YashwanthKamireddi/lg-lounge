@@ -169,8 +169,14 @@ pub enum SaverFace {
     Digital,
     /// The time over date and weather panels.
     Modular,
-    /// The quarters in tall figures around fine hands.
+    /// Every hour in tall figures around fine hands.
     Numerals,
+    /// The hours around the screen's edge, the hour it is lit.
+    Contour,
+    /// Figures, a triangle at 12 and bars at 3, 6 and 9, a minute track around the edge.
+    California,
+    /// Another face each time the saver starts.
+    Shuffle,
 }
 
 impl SaverFace {
@@ -180,6 +186,9 @@ impl SaverFace {
             Self::Digital => "digital",
             Self::Modular => "modular",
             Self::Numerals => "numerals",
+            Self::Contour => "contour",
+            Self::California => "california",
+            Self::Shuffle => "shuffle",
         }
     }
 }
@@ -274,7 +283,26 @@ pub struct Preferences {
     pub pins: Vec<Pin>,
     #[serde(deserialize_with = "lenient")]
     pub saver: SaverFace,
+    /// The shelf puts first what is usually opened at this time of day (`state::rank_pins`);
+    /// off, it keeps the pins' own order.
+    pub personal_order: bool,
+    /// Shelf videos opened, oldest first, at most `MAX_WATCHES`: what the shelf learns from.
+    #[serde(deserialize_with = "lenient")]
+    pub watched: Vec<Watch>,
 }
+
+/// A shelf video opened: its pin, the video, and when (UTC seconds, and the local minute of
+/// the day it was then, so a time zone change does not move the habit).
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct Watch {
+    pub pin: String,
+    pub video: String,
+    pub at: i64,
+    pub minute: u16,
+}
+
+/// The most opens remembered: months of a family's evenings, a few kilobytes.
+pub const MAX_WATCHES: usize = 300;
 
 /// A value this Lounge does not know (written by a newer or older one) falls
 /// back to its default, instead of failing the whole file and resetting
@@ -318,6 +346,8 @@ impl Default for Preferences {
             clock: ClockStyle::Digital,
             pins: Vec::new(),
             saver: SaverFace::Analog,
+            personal_order: true,
+            watched: Vec::new(),
         }
     }
 }

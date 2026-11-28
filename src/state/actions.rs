@@ -308,7 +308,14 @@ impl State {
                     // A pin's row asks before taking it off; the row after the pins adds one from
                     // the phone.
                     Some(Subpage::Pins) => {
+                        // After the pins: Add from your phone, then the shelf's order.
                         let Some(pin) = self.preferences.pins.get(index) else {
+                            if index > self.preferences.pins.len() {
+                                self.preferences.personal_order = !self.preferences.personal_order;
+                                self.shelf_order_due = true;
+                                self.dirty = true;
+                                return vec![Effect::Save];
+                            }
                             return self.open_phone(crate::companion::Kind::Pins);
                         };
                         self.overlay = Some(Overlay::Unpin {
@@ -316,7 +323,7 @@ impl State {
                             restore: Target::Choice(index),
                         });
                         // Cancel is where focus lands: OK pressed twice never changes a pin.
-                        self.focus = Target::Alert(if index > 0 { 2 } else { 1 });
+                        self.focus = Target::Alert(self.unpin_choices().len().saturating_sub(1));
                         self.pointer = false;
                         self.pressed = None;
                         self.panel_started =
@@ -430,7 +437,7 @@ impl State {
                     self.notify(i18n::format("unpinned", &[("title", &title)]));
                 }
                 // The row that takes its place, or Add from your phone.
-                let count = self.preferences.pins.len() + 1;
+                let count = self.preferences.pins.len() + 2;
                 self.focus = match restore {
                     Target::Choice(index) => Target::Choice(index.min(count - 1)),
                     other => other,
